@@ -1,7 +1,7 @@
 // Written by Chrollo
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FeedEvent } from '../feed/types';
-import { pickCue } from './cues';
+import { CUE_GAP_MS, pickCue, shouldChime } from './cues';
 import { readSoundPref, writeSoundPref } from './pref';
 
 const ev = (at: string, kind: FeedEvent['kind'], who: FeedEvent['who'] = 'feitan'): FeedEvent => ({
@@ -34,6 +34,17 @@ describe('pickCue', () => {
     pickCue(seen, [ev('t1', 'start'), ev('t2', 'start')], false);
     pickCue(seen, [ev('t3', 'start')], false);
     expect(seen.size).toBe(1);
+  });
+});
+
+describe('shouldChime', () => {
+  it('rate limits start cues inside the gap', () => {
+    expect(shouldChime('start', 1000, 1000 + CUE_GAP_MS - 1)).toBe(false);
+    expect(shouldChime('start', 1000, 1000 + CUE_GAP_MS)).toBe(true);
+    expect(shouldChime('start', -Infinity, 0)).toBe(true);
+  });
+  it('lets a done cue through the gap', () => {
+    expect(shouldChime('done', 1000, 1001)).toBe(true);
   });
 });
 

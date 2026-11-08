@@ -28,3 +28,8 @@ export function pickCue(
   for (const e of events) seen.add(keyOf(e));
   return first ? null : cue;
 }
+
+/** Rate limit: a `done` always plays (it is the news); `start` waits out the gap. */
+export function shouldChime(cue: Cue, lastAt: number, now: number): boolean {
+  return cue === 'done' || now - lastAt >= CUE_GAP_MS;
+}

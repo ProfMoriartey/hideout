@@ -2,7 +2,7 @@
 // Loaded with a dynamic import the first time sound is turned on. All sound is
 // synthesised here with the Web Audio API: original by construction, no files.
 import { getFeedStore } from '../feed/store';
-import { CUE_GAP_MS, pickCue, type Cue } from './cues';
+import { pickCue, shouldChime, type Cue } from './cues';
 
 const FADE_S = 0.25;
 // [frequency Hz, start offset s]
@@ -70,7 +70,7 @@ function onFeed() {
   const cue = pickCue(seen, feed.events, first);
   first = false;
   const now = performance.now();
-  if (cue && now - lastCueAt >= CUE_GAP_MS) {
+  if (cue && shouldChime(cue, lastCueAt, now)) {
     lastCueAt = now;
     chime(cue);
   }
@@ -89,13 +89,13 @@ function sync() {
   }
 }
 
-/** Turn all sound on or off. Safe to call repeatedly. Must first run from a user gesture. */
-export function setSound(next: boolean): void {
+/** Turn all sound on or off. Safe to call repeatedly. The caller creates `context` inside a user gesture. */
+export function setSound(next: boolean, context: AudioContext): void {
   if (next === on) return;
   on = next;
   if (on) {
     if (!ctx) {
-      ctx = new AudioContext();
+      ctx = context;
       master = ctx.createGain();
       master.gain.value = 0;
       master.connect(ctx.destination);

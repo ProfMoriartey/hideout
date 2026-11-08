@@ -53,7 +53,8 @@ export default function App() {
         <MissionBanner />
         <Ticker />
         <Footer />
-        <SoundToggle /> {/* [slot 7 Sound] */}
+        {/* [slot 7 Sound] */}
+        <SoundToggle />
       </OverlayBoundary>
     </>
   );
