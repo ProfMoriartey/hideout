@@ -533,7 +533,7 @@ test.describe('layout and screenshots', () => {
         return { cls: el.className, x: r.x, y: r.y, w: r.width, h: r.height };
       }),
     );
-    expect(boxes.length).toBe(3);
+    expect(boxes.length).toBe(4); // banner, ticker, footer, sound toggle;
     const W = vp?.width ?? 0;
     const H = vp?.height ?? 0;
     let covered = 0;

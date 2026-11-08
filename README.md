@@ -37,3 +37,10 @@ Chromium is already on the machine elsewhere, point to it instead:
 ```sh
 PW_CHROMIUM=/opt/pw-browsers/chromium npm run e2e
 ```
+
+## Sound credits
+
+Sound is off by default and switched on with the button at the top right (remembered
+in `localStorage`). Every sound (the ambient drone and the chimes) is synthesised in
+code with the Web Audio API in `src/audio/engine.ts`. There are no audio files, so
+nothing is downloaded and no third-party licence applies.
