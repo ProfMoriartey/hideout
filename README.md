@@ -11,23 +11,24 @@ Architecture, feed contract and performance budget: [docs/ARCHITECTURE.md](docs/
 
 ## Develop
 
-Requires Node 22+.
+Requires Node 22.12+ (`.nvmrc` says 22).
 
 ```sh
 npm ci            # install exact locked versions
 npm run dev       # dev server at http://localhost:5173/hideout/
 npm run build     # typecheck + production build into dist/
+npm run size      # gzip size per chunk; fails if entry > 60 kB or scene > 350 kB
 npm run preview   # serve dist/ at http://localhost:4173/hideout/
 npm run lint      # ESLint + Prettier check (npm run format to fix)
 npm run typecheck # tsc, no output
 npm test          # unit tests (Vitest, jsdom)
-npm run e2e       # Playwright smoke tests on desktop + phone (build first)
+npm run e2e       # builds, then Playwright tests on desktop + phone
 ```
 
 ### End-to-end tests
 
-`npm run e2e` serves the production build with `vite preview`, so run
-`npm run build` first. Two projects run: `desktop` (Chromium 1280x800) and
+`npm run e2e` builds first (`pree2e`), then serves the production build with
+`vite preview`. Two projects run: `desktop` (Chromium 1280x800) and
 `phone` (Pixel 7). Screenshots land in `e2e/screenshots/` (not committed).
 
 Browser: install it once with `npx playwright install chromium`. If a matching

@@ -23,3 +23,20 @@ test('page loads, canvas renders, no console errors', async ({ page }, testInfo)
   await page.screenshot({ path: `e2e/screenshots/smoke-${testInfo.project.name}.png` });
   expect(errors).toEqual([]);
 });
+
+test('scene chunk fails: neutral message with a working Retry', async ({ page }) => {
+  let fail = true;
+  await page.route('**/assets/App-*.js', (route) => (fail ? route.abort() : route.continue()));
+
+  await page.goto('./');
+  const boot = page.getByRole('alert');
+  await expect(boot).toContainText('The Hideout could not load. Check your connection.');
+  await expect(boot).not.toContainText('WebGL');
+  const lantern = page.locator('#boot .lantern');
+  expect(await lantern.evaluate((el) => getComputedStyle(el).animationName)).toBe('none');
+
+  fail = false;
+  await boot.getByRole('button', { name: 'Retry' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-scene', 'ready');
+  await expect(page.locator('canvas')).toBeVisible();
+});

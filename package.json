@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -11,7 +14,9 @@
     "format": "prettier --write .",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
-    "e2e": "playwright test --trace off"
+    "size": "node scripts/check-size.mjs",
+    "pree2e": "npm run build",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@react-three/drei": "9.122.0",
@@ -39,5 +44,6 @@
     "typescript-eslint": "8.72.1",
     "vite": "8.3.6",
     "vitest": "5.1.0"
-  }
+  },
+  "//": "typescript is pinned to 6.0.x because typescript-eslint 8.72 supports typescript >=4.8.4 <6.1.0; move both together."
 }
