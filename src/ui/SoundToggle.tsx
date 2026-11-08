@@ -12,15 +12,15 @@ let ctx: AudioContext | null = null;
  * Creates the AudioContext synchronously inside the user gesture (iOS Safari
  * refuses one made after the chunk download), then hands it to the engine.
  */
-function apply(next: boolean): Promise<void> {
+// async: a throwing `new AudioContext()` becomes a rejection the caller reverts on.
+async function apply(next: boolean): Promise<void> {
   if (next) {
     ctx ??= new AudioContext();
     void ctx.resume();
   }
   const c = ctx;
-  return loadEngine().then((e) => {
-    if (c) e.setSound(next, c);
-  });
+  const engine = await loadEngine();
+  if (c) engine.setSound(next, c);
 }
 
 /** One mute/unmute button. Off by default; the choice is remembered. */

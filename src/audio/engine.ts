@@ -46,7 +46,8 @@ function startAmbient(c: AudioContext, out: AudioNode) {
 }
 
 function chime(cue: Cue) {
-  if (!ctx || !master) return;
+  // A cue on a suspended context would play stale on resume.
+  if (!ctx || !master || document.hidden) return;
   const c = ctx;
   const out = master;
   for (const [freq, delay] of NOTES[cue]) {
