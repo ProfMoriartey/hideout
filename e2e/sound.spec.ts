@@ -262,7 +262,9 @@ test.describe('toggle', () => {
 });
 
 test.describe('remembered choice', () => {
-  test('survives a reload: shown on, but audio waits for the first gesture', async ({ page }) => {
+  test('survives a reload: shown on, audio starts only with the first click on the toggle', async ({
+    page,
+  }) => {
     await page.addInitScript(installAudioSpy);
     const requests: string[] = [];
     page.on('request', (r) => requests.push(r.url()));
@@ -277,17 +279,32 @@ test.describe('remembered choice', () => {
     await expect(toggleOf(page)).toHaveAttribute('aria-pressed', 'true');
     await expect(toggleOf(page)).toHaveAccessibleName('Sound');
     await page.waitForLoadState('networkidle');
-    // Autoplay policy: nothing audio-related before a gesture.
+    const engineRequests = () => requests.filter((u) => /engine-[\w-]+\.js/.test(u));
     expect(await contextCount(page)).toBe(0);
-    expect(requests.filter((u) => /engine-[\w-]+\.js/.test(u))).toEqual([]);
+    expect(engineRequests()).toEqual([]);
 
-    // The first gesture anywhere starts it, and old events do not chime.
+    // A gesture elsewhere on the page (pointer and keyboard) must not start anything.
     await page.mouse.click(300, 300);
+    await page.keyboard.press('a');
+    await page.waitForTimeout(500);
+    expect(await contextCount(page)).toBe(0);
+    expect(engineRequests()).toEqual([]);
+    await expect(toggleOf(page)).toHaveAttribute('aria-pressed', 'true');
+
+    // The first click on the toggle starts audio and keeps it on; old events do not chime.
+    await toggleOf(page).click();
+    await expect(toggleOf(page)).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(() => contextCount(page)).toBe(1);
     await expect.poll(() => oscillatorCount(page)).toBe(5);
     await expect.poll(() => contextStates(page)).toEqual(['running']);
     expect(await chimes(page)).toEqual([]);
-    await expect(toggleOf(page)).toHaveAttribute('aria-pressed', 'true');
+    expect(await stored(page)).toBe('on');
+    expect(engineRequests()).toHaveLength(1);
+
+    // Later clicks flip it as usual.
+    await toggleOf(page).click();
+    await expect(toggleOf(page)).toHaveAttribute('aria-pressed', 'false');
+    expect(await stored(page)).toBe('off');
   });
 
   test('turning it off is remembered too', async ({ page }) => {
@@ -302,26 +319,30 @@ test.describe('remembered choice', () => {
     expect(await contextCount(page)).toBe(0);
   });
 
-  test('the first click after reload on the toggle itself mutes it and stays muted', async ({
+  test('after a reload the first click keeps sound on, the second mutes it (repeated)', async ({
     page,
   }) => {
-    // The arming listener (first gesture) and the click handler both reach the engine
-    // asynchronously, so repeat the sequence: a race shows up as a context that is still
-    // running although the button says "Sound off".
     await page.addInitScript(installAudioSpy);
     await bootDemo(page);
     await toggleOf(page).click();
     await expect.poll(() => contextCount(page)).toBe(1);
     await page.clock.resume();
-    for (let round = 1; round <= 6; round++) {
+    for (let round = 1; round <= 4; round++) {
       await page.reload();
       await expect(page.locator('html')).toHaveAttribute('data-scene', 'ready');
       await expect(toggleOf(page)).toHaveAttribute('aria-pressed', 'true');
+      expect(await contextCount(page), `round ${round}`).toBe(0);
+      await toggleOf(page).click();
+      await expect(toggleOf(page)).toHaveAttribute('aria-pressed', 'true');
+      await expect
+        .poll(() => contextStates(page), { message: `round ${round}` })
+        .toEqual(['running']);
+      expect(await stored(page)).toBe('on');
       await toggleOf(page).click();
       await expect(toggleOf(page)).toHaveAttribute('aria-pressed', 'false');
       expect(await stored(page), `round ${round}`).toBe('off');
       await expectSuspended(page, `round ${round}: context still running`);
-      // Back on for the next round.
+      // Back on for the next round's reload.
       await toggleOf(page).click();
       await expect(toggleOf(page)).toHaveAttribute('aria-pressed', 'true');
       await expect.poll(() => contextStates(page)).toEqual(['running']);
