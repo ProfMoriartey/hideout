@@ -8,7 +8,7 @@ import {
   formatDuration,
   trackCelebrations,
 } from './derive';
-import type { MemberStatus, StatusFeed } from './types';
+import type { FeedEvent, MemberStatus, StatusFeed } from './types';
 
 const NOW = Date.parse('2026-11-08T12:00:00Z');
 const iso = (msAgo: number) => new Date(NOW - msAgo).toISOString();
@@ -64,6 +64,10 @@ describe('displayState', () => {
     expect(displayState(done(H), NOW)).toBe('idle');
   });
 
+  it('a done with a future since (slow client clock) does not celebrate', () => {
+    expect(displayState({ state: 'done', since: iso(-60_000) }, NOW)).toBe('idle');
+  });
+
   it('an old done celebrates while a live celebration window is open', () => {
     const old: MemberStatus = { state: 'done', since: iso(H) };
     expect(displayState(old, NOW, NOW + 1)).toBe('done');
@@ -75,12 +79,18 @@ describe('trackCelebrations', () => {
   it('opens a ~3 s window when a working -> done change is seen live', () => {
     expect(CELEBRATE_MS).toBe(3000);
     const before = feed({ members: { feitan: { state: 'working', since: iso(H) } } });
-    const after = feed({ members: { feitan: { state: 'done', since: iso(H / 2) } } });
+    const after = feed({ members: { feitan: { state: 'done', since: iso(10_000) } } });
     const c = trackCelebrations(before, after, NOW, {});
     expect(c).toEqual({ feitan: NOW + 3000 });
     const d = derive(after, c, NOW + 2999);
     expect(d.members.feitan.display).toBe('done');
     expect(derive(after, c, NOW + 3000).members.feitan.display).toBe('idle');
+  });
+
+  it('does not celebrate a working -> done that happened long before it was seen', () => {
+    const before = feed({ members: { feitan: { state: 'working', since: iso(3 * H) } } });
+    const after = feed({ members: { feitan: { state: 'done', since: iso(H / 2) } } });
+    expect(trackCelebrations(before, after, NOW, {})).toEqual({});
   });
 
   it('does not celebrate on first load or for done -> done', () => {
@@ -217,5 +227,32 @@ describe('formatDuration', () => {
     expect(formatDuration(42 * 60_000 + 59_000)).toBe('42 min');
     expect(formatDuration(3 * H + 5 * 60_000)).toBe('3 h 5 min');
     expect(formatDuration(-5)).toBe('0 s');
+  });
+});
+
+describe('ticker order and long durations', () => {
+  it('sorts events newest first whatever order the feed has', () => {
+    const e = (at: number, verb: string): FeedEvent => ({
+      at: iso(at),
+      who: 'phinks',
+      kind: 'start',
+      verb,
+    });
+    const d = derive(
+      feed({ events: [e(3000, 'forging'), e(1000, 'wiring'), e(2000, 'fixing')] }),
+      {},
+      NOW,
+    );
+    expect(d.ticker.map((t) => t.text)).toEqual([
+      'Phinks started wiring',
+      'Phinks started fixing',
+      'Phinks started forging',
+    ]);
+  });
+
+  it('shows days past 24 h', () => {
+    expect(formatDuration(26 * H)).toBe('1 d 2 h');
+    expect(formatDuration(50 * H)).toBe('2 d 2 h');
+    expect(formatDuration(23 * H + 59 * 60_000)).toBe('23 h 59 min');
   });
 });

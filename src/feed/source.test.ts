@@ -329,6 +329,227 @@ describe('feed source', () => {
     t.source.stop();
   });
 
+  it('retries a transient raw@sha failure instead of pinning the commit as bad', async () => {
+    let rawOk = false;
+    const t = setup((url, headers) => {
+      if (url === API) {
+        return headers['If-None-Match'] === `"${SHA2}"`
+          ? res(304)
+          : res(200, SHA2, { ETag: `"${SHA2}"` });
+      }
+      if (url === raw(SHA2)) return rawOk ? json(doc('2026-11-08T12:00:00Z')) : res(503);
+      return res(404);
+    });
+    t.source.start();
+    await t.clock.advance(0);
+    expect(t.last()).toMatchObject({ status: 'error', feed: null });
+    expect(t.last().error).toBe('HTTP 503 for status.json');
+    rawOk = true;
+    await t.clock.advance(30_000);
+    expect(t.apiCalls()[1]?.headers['If-None-Match']).toBeUndefined();
+    expect(t.last()).toMatchObject({ status: 'live' });
+    expect(t.last().feed).not.toBeNull();
+    // Now pinned: the next check is a 304 and stays live.
+    await t.clock.advance(30_000);
+    expect(t.apiCalls()[2]?.headers['If-None-Match']).toBe(`"${SHA2}"`);
+    expect(t.last().status).toBe('live');
+    t.source.stop();
+  });
+
+  it('keeps retrying after raw@sha 404 and 429 with the old ETag', async () => {
+    let code = 404;
+    let sha = SHA1;
+    const t = setup((url, headers) => {
+      if (url === API) {
+        return headers['If-None-Match'] === `"${sha}"`
+          ? res(304)
+          : res(200, sha, { ETag: `"${sha}"` });
+      }
+      if (url === raw(SHA1)) return json(doc('2026-11-08T11:00:00Z'));
+      return code === 200 ? json(doc('2026-11-08T12:00:30Z', 'wiring')) : res(code);
+    });
+    t.source.start();
+    await t.clock.advance(0);
+    sha = SHA2;
+    await t.clock.advance(30_000);
+    expect(t.last()).toMatchObject({ status: 'error' });
+    expect(t.last().feed?.members.phinks?.verb).toBe('forging');
+    code = 429;
+    await t.clock.advance(30_000);
+    expect(
+      t
+        .apiCalls()
+        .slice(1)
+        .map((c) => c.headers['If-None-Match']),
+    ).toEqual([`"${SHA1}"`, `"${SHA1}"`]);
+    code = 200;
+    await t.clock.advance(30_000);
+    expect(t.last().status).toBe('live');
+    expect(t.last().feed?.members.phinks?.verb).toBe('wiring');
+    t.source.stop();
+  });
+
+  it('never replaces a newer feed with an older raw-main answer, and re-pins after the fallback', async () => {
+    let limited = false;
+    const t = setup((url, headers) => {
+      if (url === API) {
+        if (limited) return res(403, '{}', limits(0, 60, t.clock.t));
+        return headers['If-None-Match'] === `"${SHA2}"`
+          ? res(304)
+          : res(200, SHA2, { ETag: `"${SHA2}"` });
+      }
+      if (url === raw(SHA2)) return json(doc('2026-11-08T12:00:30Z', 'wiring'));
+      if (url === RAW_MAIN) return json(doc('2026-11-08T11:55:00Z', 'fixing'));
+      return res(404);
+    });
+    t.source.start();
+    await t.clock.advance(0);
+    expect(t.last().feed?.members.phinks?.verb).toBe('wiring');
+    limited = true;
+    await t.clock.advance(30_000);
+    expect(t.last()).toMatchObject({ status: 'stale-source', source: 'raw-fallback' });
+    expect(t.last().feed?.members.phinks?.verb).toBe('wiring');
+    // The fallback ended: a 304 must not relabel an older feed as live.
+    limited = false;
+    await t.clock.advance(60_000);
+    expect(t.last()).toMatchObject({ status: 'live', source: 'api' });
+    expect(t.last().feed?.members.phinks?.verb).toBe('wiring');
+    t.source.stop();
+  });
+
+  it('replaces an older feed from raw main and reports its own updatedAt', async () => {
+    const t = setup((url) =>
+      url === API ? res(429) : json(doc('2026-11-08T11:58:00Z', 'fixing')),
+    );
+    t.source.start();
+    await t.clock.advance(0);
+    expect(t.last().lastUpdated).toBe(Date.parse('2026-11-08T11:58:00Z'));
+    t.source.stop();
+  });
+
+  it('rejects done greater than total from the feed', async () => {
+    const bad = doc('2026-11-08T11:00:00Z');
+    const t = setup((url) =>
+      url === API
+        ? res(200, SHA1)
+        : json({
+            ...bad,
+            missions: [
+              {
+                codename: 'Silk',
+                state: 'active',
+                startedAt: bad.updatedAt,
+                tickets: { done: 5, total: 3 },
+              },
+            ],
+          }),
+    );
+    t.source.start();
+    await t.clock.advance(0);
+    expect(t.last()).toMatchObject({ status: 'error', feed: null });
+    t.source.stop();
+  });
+
+  it('does not echo the feed content into the error', async () => {
+    const t = setup((url) =>
+      url === API ? res(200, SHA1) : json({ ...doc('2026-11-08T11:00:00Z'), '<script>evil': 1 }),
+    );
+    t.source.start();
+    await t.clock.advance(0);
+    expect(t.last().status).toBe('error');
+    expect(t.last().error).not.toContain('evil');
+    t.source.stop();
+  });
+
+  it('ignores a skewed reset header: a day-slow client clock does not stall the page', async () => {
+    const t = setup((url, headers) => {
+      if (url === API) {
+        const h = { ETag: `"${SHA1}"`, ...limits(30, 86_400, START) };
+        return headers['If-None-Match'] ? res(304, '', h) : res(200, SHA1, h);
+      }
+      return json(doc('2026-11-08T11:00:00Z'));
+    });
+    t.source.start();
+    await t.clock.advance(0);
+    // Clamped to 3600 s / 28 = ~129 s, above the 120 s cap: raw main in between.
+    await t.clock.advance(120_000);
+    expect(t.last().status).toBe('stale-source');
+    expect(t.calls.filter((c) => c.url === RAW_MAIN).length).toBeGreaterThanOrEqual(3);
+    expect(t.apiCalls()).toHaveLength(1);
+    await t.clock.advance(20_000);
+    expect(t.apiCalls()).toHaveLength(2);
+    expect(t.apiCalls()[1]?.at).toBeLessThanOrEqual(START + 140_000);
+    t.source.stop();
+  });
+
+  it('honours Retry-After on a 429', async () => {
+    const t = setup((url) =>
+      url === API ? res(429, '', { 'Retry-After': '300' }) : json(doc('2026-11-08T11:00:00Z')),
+    );
+    t.source.start();
+    await t.clock.advance(290_000);
+    expect(t.apiCalls()).toHaveLength(1);
+    await t.clock.advance(40_000);
+    expect(t.apiCalls()).toHaveLength(2);
+    t.source.stop();
+  });
+
+  it('rapid visibility toggles do not burn the API budget', async () => {
+    const t = setup((url, headers) => {
+      if (url === API) return headers['If-None-Match'] ? res(304) : res(200, SHA1);
+      return json(doc('2026-11-08T11:00:00Z'));
+    });
+    t.source.start();
+    await t.clock.advance(0);
+    for (let i = 0; i < 20; i++) {
+      await t.clock.advance(500);
+      t.visibility.set(true);
+      t.visibility.set(false);
+    }
+    await t.clock.advance(0);
+    expect(t.apiCalls()).toHaveLength(1);
+    await t.clock.advance(20_000);
+    expect(t.apiCalls()).toHaveLength(2);
+    expect(t.apiCalls()[1]?.at).toBe(START + 30_000);
+    t.source.stop();
+  });
+
+  it('retries at once when the network returns while offline', async () => {
+    let down = true;
+    const t = setup((url, headers) => {
+      if (down) throw new TypeError('Failed to fetch');
+      if (url === API) return headers['If-None-Match'] ? res(304) : res(200, SHA1);
+      return json(doc('2026-11-08T11:00:00Z'));
+    });
+    t.source.start();
+    await t.clock.advance(0);
+    expect(t.last().status).toBe('offline');
+    down = false;
+    t.visibility.set(false); // the 'online' event reaches the same callback
+    await t.clock.advance(0);
+    expect(t.last().status).toBe('live');
+    expect(t.apiCalls()[1]?.at).toBe(START);
+    t.source.stop();
+  });
+
+  it('emits nothing after stop() even when a request is still in flight', async () => {
+    let release: () => void = () => {};
+    const t = setup((url) =>
+      url === API
+        ? new Promise<ResponseLike>((r) => {
+            release = () => r(res(200, SHA1));
+          })
+        : json(doc('2026-11-08T11:00:00Z')),
+    );
+    t.source.start();
+    await t.clock.advance(0);
+    const n = t.snaps.length;
+    t.source.stop();
+    release();
+    await t.clock.advance(1000);
+    expect(t.snaps).toHaveLength(n);
+  });
+
   it('stops polling after stop()', async () => {
     const t = setup((url) => (url === API ? res(200, SHA1) : json(doc('2026-11-08T11:00:00Z'))));
     t.source.start();

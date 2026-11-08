@@ -18,13 +18,16 @@ export const STALE_AFTER_MS = 3 * 60 * 60 * 1000;
 export const RECENT_DONE_MS = 8000;
 /** Length of the celebration for a working -> done change seen live. */
 export const CELEBRATE_MS = 3000;
+/** A working -> done only counts as seen live if it began within ~2 poll intervals. */
+const LIVE_DONE_MS = 60_000;
 export const TICKER_SIZE = 10;
 
 /** Member id -> end of its live celebration window (epoch ms). */
 export type Celebrations = Partial<Record<MemberId, number>>;
 export type NameOf = (id: MemberId) => string;
 
-export type MemberView = {
+/** What the scene needs: changes only when the display does, never with the clock. */
+export type MemberCore = {
   id: MemberId;
   name: string;
   display: DisplayState;
@@ -34,6 +37,9 @@ export type MemberView = {
   verb?: string;
   mission?: string;
   progress?: Count;
+};
+
+export type MemberView = MemberCore & {
   /** Time since the member started working, while working or stale. */
   runningForMs: number | null;
   runningFor: string | null;
@@ -78,7 +84,8 @@ export function displayState(
       return quiet > STALE_AFTER_MS ? 'stale' : 'working';
     }
     case 'done':
-      if (age < RECENT_DONE_MS) return 'done';
+      // A negative age is a client clock behind the feed: no free celebration.
+      if (age >= 0 && age < RECENT_DONE_MS) return 'done';
       return celebrateUntil !== undefined && now < celebrateUntil ? 'done' : 'idle';
     default: {
       const never: never = status.state;
@@ -101,7 +108,12 @@ export function trackCelebrations(
   for (const id of MEMBER_IDS) {
     const until = current[id];
     if (until !== undefined && until > now) out[id] = until;
-    if (prev && prev.members[id]?.state === 'working' && next.members[id]?.state === 'done') {
+    const done = next.members[id];
+    if (
+      prev?.members[id]?.state === 'working' &&
+      done?.state === 'done' &&
+      now - Date.parse(done.since) < LIVE_DONE_MS
+    ) {
       out[id] = now + CELEBRATE_MS;
     }
   }
@@ -113,7 +125,9 @@ export function formatDuration(ms: number): string {
   if (s < 60) return `${s} s`;
   const min = Math.floor(s / 60);
   if (min < 60) return `${min} min`;
-  return `${Math.floor(min / 60)} h ${min % 60} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h} h ${min % 60} min`;
+  return `${Math.floor(h / 24)} d ${h % 24} h`;
 }
 
 export function formatAgo(ms: number): string {
@@ -143,6 +157,26 @@ export function eventText(e: FeedEvent, nameOf: NameOf = defaultName): string {
   }
 }
 
+export function memberCore(
+  id: MemberId,
+  status: MemberStatus | undefined,
+  now: number,
+  celebrateUntil: number | undefined,
+  nameOf: NameOf,
+): MemberCore {
+  const core: MemberCore = {
+    id,
+    name: nameOf(id),
+    display: displayState(status, now, celebrateUntil),
+    state: status?.state ?? 'idle',
+    since: status ? Date.parse(status.since) : null,
+  };
+  if (status?.verb !== undefined) core.verb = status.verb;
+  if (status?.mission !== undefined) core.mission = status.mission;
+  if (status?.progress !== undefined) core.progress = status.progress;
+  return core;
+}
+
 function memberView(
   id: MemberId,
   status: MemberStatus | undefined,
@@ -150,23 +184,14 @@ function memberView(
   celebrateUntil: number | undefined,
   nameOf: NameOf,
 ): MemberView {
-  const display = displayState(status, now, celebrateUntil);
-  const since = status ? Date.parse(status.since) : null;
-  const running = since !== null && (display === 'working' || display === 'stale');
-  const runningForMs = running ? Math.max(0, now - since) : null;
-  const view: MemberView = {
-    id,
-    name: nameOf(id),
-    display,
-    state: status?.state ?? 'idle',
-    since,
+  const core = memberCore(id, status, now, celebrateUntil, nameOf);
+  const running = core.since !== null && (core.display === 'working' || core.display === 'stale');
+  const runningForMs = running && core.since !== null ? Math.max(0, now - core.since) : null;
+  return {
+    ...core,
     runningForMs,
     runningFor: runningForMs === null ? null : formatDuration(runningForMs),
   };
-  if (status?.verb !== undefined) view.verb = status.verb;
-  if (status?.mission !== undefined) view.mission = status.mission;
-  if (status?.progress !== undefined) view.progress = status.progress;
-  return view;
 }
 
 function missionView(m: Mission, now: number): MissionView {
@@ -208,15 +233,19 @@ export function derive(
       a.state === b.state ? b.startedAt - a.startedAt : a.state === 'active' ? -1 : 1,
     );
 
-  const ticker = (feed?.events ?? []).slice(0, TICKER_SIZE).map((e, i) => {
-    const at = Date.parse(e.at);
-    return {
-      key: `${e.at}-${e.who}-${e.kind}-${i}`,
-      at,
-      text: eventText(e, nameOf),
-      ago: formatAgo(now - at),
-    };
-  });
+  // Newest first by time, whatever order the feed wrote them in.
+  const ticker = (feed?.events ?? [])
+    .map((e) => ({ e, at: Date.parse(e.at) }))
+    .sort((a, b) => b.at - a.at)
+    .slice(0, TICKER_SIZE)
+    .map(({ e, at }, i) => {
+      return {
+        key: `${e.at}-${e.who}-${e.kind}-${i}`,
+        at,
+        text: eventText(e, nameOf),
+        ago: formatAgo(now - at),
+      };
+    });
 
   return {
     members,

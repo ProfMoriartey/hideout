@@ -91,9 +91,9 @@ function obj(
   required: readonly string[],
 ): Obj {
   if (!isObj(v)) fail(path, 'expected an object');
-  for (const k of Object.keys(v)) if (!allowed.includes(k)) fail(path, `unexpected field "${k}"`);
+  for (const k of Object.keys(v)) if (!allowed.includes(k)) fail(path, 'unexpected field');
   for (const k of required)
-    if (!Object.prototype.hasOwnProperty.call(v, k)) fail(path, `missing field "${k}"`);
+    if (!Object.prototype.hasOwnProperty.call(v, k)) fail(path, 'missing field');
   return v;
 }
 

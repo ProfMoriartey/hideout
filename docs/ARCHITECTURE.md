@@ -25,16 +25,26 @@ Chosen method (`src/feed/source.ts`):
    so the interval is stretched from the response headers:
    `interval = max(30 s, (X-RateLimit-Reset - now) / max(X-RateLimit-Remaining - 2, 1))`.
    Worst case (several tabs, 304s counted) is about one check per 60 s, which still
-   meets the ~60 s freshness target for a single viewer.
+   meets the ~60 s freshness target for a single viewer. The reset time is clamped
+   to 0..1 h (a skewed phone clock cannot stall the page); checks further apart than
+   120 s read raw main in between. A tab switch never polls before the poll already due.
 4. If the API answers 403/429 or the budget is 0, fall back until the reset to
    `raw.githubusercontent.com/.../main/status.json` (up to 5 min stale) and say so
-   in the "updated" indicator.
+   in the "updated" indicator. Raw main never replaces a newer feed (`updatedAt`),
+   and the pinned SHA/ETag is dropped when it is used, so the next API check refetches.
+   A failed raw@sha fetch (5xx/404/429) keeps the old ETag and is retried.
 5. Network errors: keep the last good feed, show the offline state, back off
    30 s -> 60 s -> 120 s (cap), recover on the next success.
 6. Every fetched document is validated (`src/feed/validate.ts`) against the same
    rules as the feed schema; anything invalid is dropped, never rendered.
 
-`?demo=1` swaps the source for a local fake feed (`src/feed/demo.ts`) that cycles
+One poller per page: `src/feed/store.ts` is a singleton started by the first
+subscriber and stopped by the last. Scene code reads `useMember(id)` /
+`useFeedStatus()` (re-render only on change); `useFeed()` and `useNow()` tick every
+second, so they belong in leaf DOM text, never in the Canvas tree. Names come
+through `store.setNameOf` (the lead wires `src/config/members.ts` at integration).
+
+`?demo=1` (optional `&seed=<n>&origin=<epoch ms>`) swaps the source for a local fake feed (`src/feed/demo.ts`) that cycles
 members through all states, several at once, plus missions and events.
 
 ## Feed contract (v1)

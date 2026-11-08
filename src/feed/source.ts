@@ -25,6 +25,10 @@ export const FEED_CONFIG: FeedConfig = {
 
 export const BASE_INTERVAL_MS = 30_000;
 export const MAX_BACKOFF_MS = 120_000;
+/** Longest wait between API checks; a longer budget interval reads raw main in between. */
+export const MAX_API_DELAY_MS = 120_000;
+/** Reset times beyond this are a skewed client clock, not a real wait. */
+const MAX_RESET_WAIT_MS = 3_600_000;
 /** Requests kept in reserve when stretching the interval to the budget. */
 const BUDGET_RESERVE = 2;
 /** Fallback length when a 403/429 carries no usable reset time. */
@@ -50,7 +54,7 @@ export type Clock = {
 
 export type Visibility = {
   hidden(): boolean;
-  /** Calls `cb` on every visibility change; returns an unsubscribe function. */
+  /** Calls `cb` on every visibility change or return of the network; returns an unsubscribe function. */
   subscribe(cb: () => void): () => void;
 };
 
@@ -88,23 +92,36 @@ export const documentVisibility: Visibility = {
   subscribe: (cb) => {
     if (typeof document === 'undefined') return () => {};
     document.addEventListener('visibilitychange', cb);
-    return () => document.removeEventListener('visibilitychange', cb);
+    window.addEventListener('online', cb);
+    return () => {
+      document.removeEventListener('visibilitychange', cb);
+      window.removeEventListener('online', cb);
+    };
   },
 };
 
 const browserFetch: FetchLike = (url, init) => globalThis.fetch(url, init);
 
+/** Time until the rate-limit reset, clamped so a skewed client clock cannot stretch it. */
+function untilReset(headers: ResponseLike['headers'], now: number): number {
+  const wait = Number(headers.get('X-RateLimit-Reset')) * 1000 - now;
+  return wait > 0 ? Math.min(wait, MAX_RESET_WAIT_MS) : 0;
+}
+
 /** Next API check delay: max(30 s, time to reset / max(remaining - 2, 1)). */
 export function budgetInterval(headers: ResponseLike['headers'], now: number): number {
   const remaining = Number(headers.get('X-RateLimit-Remaining'));
-  const reset = Number(headers.get('X-RateLimit-Reset')) * 1000;
-  if (!headers.get('X-RateLimit-Remaining') || !Number.isFinite(remaining) || !(reset > now)) {
+  const wait = untilReset(headers, now);
+  if (!headers.get('X-RateLimit-Remaining') || !Number.isFinite(remaining) || wait <= 0) {
     return BASE_INTERVAL_MS;
   }
-  return Math.max(BASE_INTERVAL_MS, (reset - now) / Math.max(remaining - BUDGET_RESERVE, 1));
+  return Math.max(BASE_INTERVAL_MS, wait / Math.max(remaining - BUDGET_RESERVE, 1));
 }
 
 class Offline extends Error {}
+
+/** `transient`: an HTTP failure, retried; otherwise the document itself is bad. */
+type Doc = { feed: StatusFeed } | { error: string; transient: boolean };
 
 export function createFeedSource(options: SourceOptions): FeedSource {
   const config = options.config ?? FEED_CONFIG;
@@ -120,7 +137,10 @@ export function createFeedSource(options: SourceOptions): FeedSource {
   let lastSha: string | null = null;
   /** The document at lastSha failed validation. */
   let shaInvalid = false;
-  let fallbackUntil = 0;
+  /** No API call before this time; raw main is read until then. */
+  let apiNotBefore = 0;
+  /** When the next poll is due; a visibility flip must not poll earlier. */
+  let nextAt = 0;
   let failures = 0;
   let timer: unknown = null;
   let inFlight = false;
@@ -128,6 +148,7 @@ export function createFeedSource(options: SourceOptions): FeedSource {
   let unsubscribe: () => void = () => {};
 
   function emit(patch: Partial<FeedSnapshot>) {
+    if (!running) return;
     const next: FeedSnapshot = { ...snap, ...patch };
     if (!('error' in patch) && next.status !== 'error') delete next.error;
     snap = next;
@@ -135,6 +156,7 @@ export function createFeedSource(options: SourceOptions): FeedSource {
   }
 
   function schedule(ms: number) {
+    nextAt = clock.now() + ms;
     if (timer !== null) clock.clearTimeout(timer);
     timer = clock.setTimeout(() => {
       timer = null;
@@ -150,10 +172,10 @@ export function createFeedSource(options: SourceOptions): FeedSource {
     }
   }
 
-  /** Fetches and validates one document. Returns the feed or an error message. */
-  async function fetchDoc(url: string): Promise<StatusFeed | string> {
+  /** Fetches and validates one document. */
+  async function fetchDoc(url: string): Promise<Doc> {
     const r = await get(url);
-    if (!r.ok) return `HTTP ${r.status} for ${path}`;
+    if (!r.ok) return { error: `HTTP ${r.status} for ${path}`, transient: true };
     let body: string;
     try {
       body = await r.text();
@@ -164,26 +186,35 @@ export function createFeedSource(options: SourceOptions): FeedSource {
     try {
       data = JSON.parse(body);
     } catch {
-      return 'feed is not JSON';
+      return { error: 'feed is not JSON', transient: false };
     }
     const v = validateFeed(data);
-    return v.ok ? v.feed : `invalid feed (${v.error})`;
+    return v.ok ? { feed: v.feed } : { error: `invalid feed (${v.error})`, transient: false };
   }
 
   function startFallback(headers: ResponseLike['headers'], now: number) {
-    const reset = Number(headers.get('X-RateLimit-Reset')) * 1000;
-    fallbackUntil = reset > now ? reset : now + DEFAULT_FALLBACK_MS;
+    const retry = Number(headers.get('Retry-After')) * 1000;
+    const wait = retry > 0 ? retry : untilReset(headers, now) || DEFAULT_FALLBACK_MS;
+    apiNotBefore = now + Math.min(wait, MAX_RESET_WAIT_MS);
   }
 
   async function pollFallback(): Promise<number> {
-    const result = await fetchDoc(rawUrl(branch));
+    const doc = await fetchDoc(rawUrl(branch));
     const now = clock.now();
-    if (typeof result === 'string') {
-      emit({ status: 'error', source: 'raw-fallback', error: result });
+    if (!('feed' in doc)) {
+      emit({ status: 'error', source: 'raw-fallback', error: doc.error });
+    } else if (snap.feed && Date.parse(doc.feed.updatedAt) <= Date.parse(snap.feed.updatedAt)) {
+      // The CDN can lag the commit we already hold: never replace a newer feed.
+      emit({ status: 'stale-source', source: 'raw-fallback' });
     } else {
-      emit({ feed: result, lastUpdated: now, status: 'stale-source', source: 'raw-fallback' });
+      // Pinned state belongs to the feed we just replaced; re-pin on the next API check.
+      etag = null;
+      lastSha = null;
+      shaInvalid = false;
+      const lastUpdated = Date.parse(doc.feed.updatedAt);
+      emit({ feed: doc.feed, lastUpdated, status: 'stale-source', source: 'raw-fallback' });
     }
-    return BASE_INTERVAL_MS;
+    return Math.max(1000, Math.min(BASE_INTERVAL_MS, apiNotBefore - now));
   }
 
   async function pollApi(): Promise<number> {
@@ -200,6 +231,10 @@ export function createFeedSource(options: SourceOptions): FeedSource {
     // The budget ran out: use this answer, then read raw until the reset.
     if (r.headers.get('X-RateLimit-Remaining') === '0') {
       startFallback(r.headers, now);
+      delay = BASE_INTERVAL_MS;
+    } else if (delay > MAX_API_DELAY_MS) {
+      // Stretched budget: keep the page fresh from raw main between API checks.
+      apiNotBefore = now + delay;
       delay = BASE_INTERVAL_MS;
     }
 
@@ -228,16 +263,21 @@ export function createFeedSource(options: SourceOptions): FeedSource {
       return delay;
     }
 
-    const result = await fetchDoc(rawUrl(sha));
-    // Remember the commit either way, so an invalid document is not refetched.
-    lastSha = sha;
-    etag = r.headers.get('ETag') ?? `"${sha}"`;
-    if (typeof result === 'string') {
-      shaInvalid = true;
-      emit({ status: 'error', source: 'api', error: result });
-    } else {
+    const doc = await fetchDoc(rawUrl(sha));
+    if ('feed' in doc) {
+      lastSha = sha;
+      etag = r.headers.get('ETag') ?? `"${sha}"`;
       shaInvalid = false;
-      emit({ feed: result, lastUpdated: clock.now(), status: 'live', source: 'api' });
+      emit({ feed: doc.feed, lastUpdated: clock.now(), status: 'live', source: 'api' });
+    } else if (doc.transient) {
+      // Keep the old ETag so the next check sees this commit as new and retries.
+      emit({ status: 'error', source: 'api', error: doc.error });
+    } else {
+      // The commit itself is bad: remember it so it is not refetched every poll.
+      lastSha = sha;
+      etag = r.headers.get('ETag') ?? `"${sha}"`;
+      shaInvalid = true;
+      emit({ status: 'error', source: 'api', error: doc.error });
     }
     return delay;
   }
@@ -247,7 +287,7 @@ export function createFeedSource(options: SourceOptions): FeedSource {
     inFlight = true;
     let delay: number;
     try {
-      delay = clock.now() < fallbackUntil ? await pollFallback() : await pollApi();
+      delay = clock.now() < apiNotBefore ? await pollFallback() : await pollApi();
       failures = 0;
     } catch (err) {
       if (err instanceof Offline) {
@@ -262,6 +302,7 @@ export function createFeedSource(options: SourceOptions): FeedSource {
     } finally {
       inFlight = false;
     }
+    nextAt = clock.now() + delay;
     if (running && !visibility.hidden()) schedule(delay);
   }
 
@@ -270,8 +311,13 @@ export function createFeedSource(options: SourceOptions): FeedSource {
     if (visibility.hidden()) {
       if (timer !== null) clock.clearTimeout(timer);
       timer = null;
-    } else {
+    } else if (snap.status === 'offline') {
+      // Back online (or back in the tab) after failures: retry now, not after the backoff.
+      failures = 0;
       void tick();
+    } else {
+      // Rapid tab switches must not burn the API budget: wait for the poll already due.
+      schedule(Math.max(0, nextAt - clock.now()));
     }
   }
 

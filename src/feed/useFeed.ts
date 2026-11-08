@@ -1,21 +1,12 @@
-// React entry point for the feed: picks the live or demo source, keeps the
-// last snapshot, tracks live celebrations and re-derives once a second.
-import { useEffect, useMemo, useState } from 'react';
-import { createDemoSource } from './demo';
-import { derive, trackCelebrations, type Celebrations, type Derived } from './derive';
-import {
-  FEED_CONFIG,
-  createFeedSource,
-  systemClock,
-  type Clock,
-  type FeedConfig,
-  type FeedSnapshot,
-  type FetchLike,
-  type SourceKind,
-  type SourceStatus,
-  type Visibility,
-} from './source';
-import type { StatusFeed } from './types';
+// React hooks over the singleton feed store (store.ts). Scene code uses
+// useMember/useFeedStatus (they re-render only when their value changes);
+// useFeed and useNow tick every second, so keep them in leaf DOM text, never
+// in the Canvas tree.
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { derive, type Derived, type MemberCore } from './derive';
+import type { SourceKind, SourceStatus } from './source';
+import { getFeedStore, type FeedStore } from './store';
+import type { MemberId, StatusFeed } from './types';
 
 export type FeedState = {
   feed: StatusFeed | null;
@@ -25,83 +16,39 @@ export type FeedState = {
   source: SourceKind;
 };
 
-export type UseFeedOptions = {
-  /** Defaults to `?demo=1` in the page URL. */
-  demo?: boolean;
-  /** Demo seed; defaults to `?seed=<n>` or 1. */
-  seed?: number;
-  config?: FeedConfig;
-  fetch?: FetchLike;
-  clock?: Clock;
-  visibility?: Visibility;
-};
-
-export const DEFAULT_SEED = 1;
-const TICK_MS = 1000;
-
-/** Reads `?demo=1` and `?seed=<n>` from a query string. */
-export function readDemoParams(search: string): { demo: boolean; seed: number } {
-  const params = new URLSearchParams(search);
-  const seed = Number.parseInt(params.get('seed') ?? '', 10);
-  return {
-    demo: params.get('demo') === '1',
-    seed: Number.isFinite(seed) ? seed : DEFAULT_SEED,
-  };
+/** One member's display state. Stable between changes, no clock-driven text. */
+export function useMember(id: MemberId, store: FeedStore = getFeedStore()): MemberCore {
+  return useSyncExternalStore(store.subscribe, () => store.getMember(id));
 }
 
-type Held = { snap: FeedSnapshot; celebrations: Celebrations };
+/** Connection state and the time the feed was last confirmed. */
+export function useFeedStatus(store: FeedStore = getFeedStore()) {
+  return useSyncExternalStore(store.subscribe, store.getStatus);
+}
 
-export function useFeed(options: UseFeedOptions = {}): FeedState {
-  const fromUrl = readDemoParams(typeof location === 'undefined' ? '' : location.search);
-  const demo = options.demo ?? fromUrl.demo;
-  const seed = options.seed ?? fromUrl.seed;
-  const { config = FEED_CONFIG, fetch, clock = systemClock, visibility } = options;
-
-  const [held, setHeld] = useState<Held>(() => ({
-    snap: { feed: null, lastUpdated: null, status: 'loading', source: demo ? 'demo' : 'api' },
-    celebrations: {},
-  }));
+/** The current time, refreshed every `ms`. Leaf DOM text only. */
+export function useNow(ms = 1000, store: FeedStore = getFeedStore()): number {
+  const { clock } = store;
   const [now, setNow] = useState(() => clock.now());
-
-  useEffect(() => {
-    const onChange = (snap: FeedSnapshot) => {
-      const t = clock.now();
-      setNow(t);
-      setHeld((prev) => ({
-        snap,
-        celebrations:
-          snap.feed && snap.feed !== prev.snap.feed
-            ? trackCelebrations(prev.snap.feed, snap.feed, t, prev.celebrations)
-            : prev.celebrations,
-      }));
-    };
-    const source = demo
-      ? createDemoSource({ seed, clock, onChange })
-      : createFeedSource({
-          config,
-          clock,
-          onChange,
-          ...(fetch ? { fetch } : {}),
-          ...(visibility ? { visibility } : {}),
-        });
-    source.start();
-    return () => source.stop();
-  }, [demo, seed, config, fetch, clock, visibility]);
-
   useEffect(() => {
     let timer: unknown = null;
     const loop = () => {
       setNow(clock.now());
-      timer = clock.setTimeout(loop, TICK_MS);
+      timer = clock.setTimeout(loop, ms);
     };
-    timer = clock.setTimeout(loop, TICK_MS);
+    timer = clock.setTimeout(loop, ms);
     return () => clock.clearTimeout(timer);
-  }, [clock]);
+  }, [clock, ms]);
+  return now;
+}
 
-  const { snap, celebrations } = held;
+/** Everything, re-derived every second (running times, ticker, missions). DOM only. */
+export function useFeed(store: FeedStore = getFeedStore()): FeedState {
+  const { snap, celebrations, nameOf } = useSyncExternalStore(store.subscribe, store.getState);
+  const now = useNow(1000, store);
   const derived = useMemo(
-    () => derive(snap.feed, celebrations, now),
-    [snap.feed, celebrations, now],
+    () => derive(snap.feed, celebrations, now, nameOf),
+    [snap.feed, celebrations, now, nameOf],
   );
   return {
     feed: snap.feed,
