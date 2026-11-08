@@ -1,20 +1,12 @@
 import { Canvas } from '@react-three/fiber';
 import { hideBootScreen } from './boot';
 import { OverlayBoundary, SceneBoundary } from './boundaries';
+import { CameraRig } from './scene/CameraRig';
+import { Hideout } from './scene/Hideout';
 
 // Composition root. Loaded lazily from main.tsx, so everything imported here
 // (three, R3F, drei, scene and UI) is code-split from the entry chunk.
 // Tickets 3-8 each add their component on the marked line; keep the slots.
-
-/** Placeholder voxel: one lantern-lit cube. Ticket 3 replaces it with <Hideout />. */
-function PlaceholderVoxel() {
-  return (
-    <mesh rotation={[0.5, 0.75, 0]}>
-      <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial color="#6b4a2e" emissive="#ff9a3c" emissiveIntensity={0.25} />
-    </mesh>
-  );
-}
 
 export default function App() {
   return (
@@ -33,7 +25,8 @@ export default function App() {
           <directionalLight position={[4, 6, 3]} intensity={1.2} color="#ffd9a0" />
 
           {/* [slot 3 Structure] <Hideout /> and <CameraRig /> */}
-          <PlaceholderVoxel />
+          <Hideout />
+          <CameraRig />
           {/* [slot 4 Members] <Members /> and <RoomLights /> */}
           {/* [slot 5 Labels] <Labels /> */}
           {/* [slot 8 Performance] <PerfMonitor /> */}
