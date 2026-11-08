@@ -3,6 +3,9 @@ import { hideBootScreen } from './boot';
 import { OverlayBoundary, SceneBoundary } from './boundaries';
 import { CameraRig } from './scene/CameraRig';
 import { Hideout } from './scene/Hideout';
+import { Footer } from './ui/Footer';
+import { MissionBanner } from './ui/MissionBanner';
+import { Ticker } from './ui/Ticker';
 
 // Composition root. Loaded lazily from main.tsx, so everything imported here
 // (three, R3F, drei, scene and UI) is code-split from the entry chunk.
@@ -37,7 +40,10 @@ export default function App() {
           boundary: one that throws disappears, the scene keeps running. */}
       <OverlayBoundary>
         {/* [slot 5 Panel] <RoomPanel /> */}
-        {/* [slot 6 Global UI] <MissionBanner /> <Ticker /> <Freshness /> <Footer /> */}
+        {/* [slot 6 Global UI] Freshness is mounted inside Footer */}
+        <MissionBanner />
+        <Ticker />
+        <Footer />
         {/* [slot 7 Sound] <SoundToggle /> */}
       </OverlayBoundary>
     </>
