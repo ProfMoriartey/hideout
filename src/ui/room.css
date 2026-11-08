@@ -43,17 +43,13 @@
 .room-label[data-state='stale'] .room-verb {
   color: #c8bfa8;
 }
-.room-plaque {
+.room-label .room-plaque {
   display: none;
   margin-top: 2px;
   color: #d8cdb2;
 }
-.room-labels[data-plaque] .room-plaque {
+.room-labels[data-plaque] .room-label .room-plaque {
   display: block;
-}
-.room-label[data-state='working'] .room-name::after {
-  content: ' •';
-  color: #ffb347;
 }
 .room-panel {
   top: calc(max(8px, env(safe-area-inset-top)) + 7rem); /* below the mission banner */
@@ -65,8 +61,8 @@
   background: rgba(11, 10, 16, 0.92);
   pointer-events: auto;
 }
-.room-panel:focus-visible {
-  outline: 2px solid #ffb347;
+.room-panel:focus {
+  outline: none; /* focus lands on the dialog itself; its buttons keep their rings */
 }
 .room-panel h2 {
   margin: 0;
