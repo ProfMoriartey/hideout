@@ -318,3 +318,64 @@ test('no console warnings besides the known THREE.Clock deprecation', async ({ p
   await settle(page);
   expect(seen.filter((t) => !/THREE\.Clock/.test(t))).toEqual([]);
 });
+
+// Exact limits, read from the camera probe (window.__hideoutStats).
+test.describe('camera limits (probe)', () => {
+  const stats = (page: Page) => page.evaluate(() => window.__hideoutStats);
+
+  test('starts at the default angles, fitted, with limits 0.75x..7x of the fit', async ({
+    page,
+  }) => {
+    await page.goto('./');
+    await settle(page);
+    const s = await stats(page);
+    expect(s?.azimuth).toBeCloseTo(0.42, 3);
+    expect(s?.polar).toBeCloseTo(Math.PI / 2 - 0.4, 3);
+    expect((s?.minZoom ?? 0) / 0.75).toBeCloseTo(s?.zoom ?? 0, 2);
+    expect((s?.maxZoom ?? 0) / (s?.minZoom ?? 1)).toBeCloseTo(7 / 0.75, 2);
+  });
+
+  test('polar angle stops exactly at both clamps', async ({ page }) => {
+    await page.goto('./');
+    await settle(page);
+    const h = Math.round(center(page).y * 1.6);
+    await mouseDrag(page, 0, h, 'right');
+    await mouseDrag(page, 0, h, 'right');
+    await expect.poll(async () => (await stats(page))?.polar).toBeCloseTo(Math.PI / 2 - 0.85, 3);
+    await mouseDrag(page, 0, -h, 'right');
+    await mouseDrag(page, 0, -h, 'right');
+    await expect.poll(async () => (await stats(page))?.polar).toBeCloseTo(Math.PI / 2 - 0.12, 3);
+  });
+
+  test('azimuth stops exactly at both clamps', async ({ page }) => {
+    await page.goto('./');
+    await settle(page);
+    const w = Math.round(center(page).x * 1.6);
+    for (const [dir, want] of [
+      [-1, 0.42 - 0.55],
+      [1, 0.42 + 0.55],
+    ] as const) {
+      await mouseDrag(page, dir * w, 0, 'right');
+      await mouseDrag(page, dir * w, 0, 'right');
+      await mouseDrag(page, dir * w, 0, 'right');
+      await expect.poll(async () => (await stats(page))?.azimuth).toBeCloseTo(want, 3);
+    }
+  });
+
+  test('pinch zoom stops at the zoom limits', async ({ page }) => {
+    await page.goto('./');
+    await settle(page);
+    const { x, y } = center(page);
+    const pair = (g: number) => [
+      { x: x - g, y },
+      { x: x + g, y },
+    ];
+    const g = Math.min(x, y) * 0.8;
+    for (let i = 0; i < 6; i++) await touchGesture(page, pair(g / 8), pair(g));
+    const hi = await stats(page);
+    expect(hi?.zoom).toBeCloseTo(hi?.maxZoom ?? 0, 2);
+    for (let i = 0; i < 6; i++) await touchGesture(page, pair(g), pair(g / 8));
+    const lo = await stats(page);
+    expect(lo?.zoom).toBeCloseTo(lo?.minZoom ?? 0, 2);
+  });
+});
