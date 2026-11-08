@@ -29,7 +29,7 @@ test('scene chunk fails: neutral message with a working Retry', async ({ page })
   await page.route('**/assets/App-*.js', (route) => (fail ? route.abort() : route.continue()));
 
   await page.goto('./');
-  const boot = page.getByRole('status');
+  const boot = page.getByRole('alert');
   await expect(boot).toContainText('The Hideout could not load. Check your connection.');
   await expect(boot).not.toContainText('WebGL');
   const lantern = page.locator('#boot .lantern');

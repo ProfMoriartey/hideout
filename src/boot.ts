@@ -56,6 +56,7 @@ export function showBootError(
   }
   boot.classList.remove('boot-hidden');
   boot.classList.add('boot-error');
+  boot.setAttribute('role', 'alert');
 
   let text = boot.querySelector('p');
   if (!text) {
@@ -71,5 +72,6 @@ export function showBootError(
     button.textContent = 'Retry';
     button.addEventListener('click', () => reload());
     boot.append(button);
+    button.focus();
   }
 }

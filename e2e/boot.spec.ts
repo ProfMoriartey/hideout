@@ -48,7 +48,7 @@ test('no WebGL: the loading screen turns into an error message', async ({
 
   await page.goto('./');
   await expect(page.locator('html')).toHaveAttribute('data-scene', 'error');
-  await expect(boot(page)).toHaveText(/could not open here/);
+  await expect(page.getByRole('alert')).toHaveText(/could not open here/);
   await expect(page.locator('canvas')).toHaveCount(0);
 });
 
@@ -61,5 +61,5 @@ test('scene chunk fails to load: an error is shown, not an endless loader', asyn
 
   await page.goto('./');
   await expect(page.locator('html')).toHaveAttribute('data-scene', 'error');
-  await expect(boot(page)).not.toHaveText('Entering the Hideout...');
+  await expect(page.getByRole('alert')).not.toHaveText('Entering the Hideout...');
 });

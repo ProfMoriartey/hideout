@@ -10,7 +10,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.head_ref || github.ref_name }}
+  # event_name keeps a push run and a pull_request run from cancelling each other.
+  group: ci-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -40,17 +41,15 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      - name: Build
-        run: npm run build
-
-      - name: Bundle size budget
-        run: npm run size
-
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
+      # pree2e builds first, so dist/ exists for the size check below.
       - name: End-to-end tests
         run: npm run e2e
+
+      - name: Bundle size budget
+        run: npm run size
 
       - name: Upload screenshots
         if: ${{ always() }}

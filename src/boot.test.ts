@@ -41,7 +41,7 @@ describe('boot screen', () => {
 
     const reload = vi.fn();
     showBootError(MESSAGES.load, { retry: true, reload });
-    expect(boot()?.getAttribute('role')).toBe('status');
+    expect(boot()?.getAttribute('role')).toBe('alert');
     expect(boot()?.classList.contains('boot-hidden')).toBe(false);
     expect(document.querySelector('#boot p')?.textContent).toBe(MESSAGES.load);
 

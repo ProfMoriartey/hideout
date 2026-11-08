@@ -16,7 +16,7 @@
     "test": "vitest run",
     "size": "node scripts/check-size.mjs",
     "pree2e": "npm run build",
-    "e2e": "playwright test --trace off"
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@react-three/drei": "9.122.0",

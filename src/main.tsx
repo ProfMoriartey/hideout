@@ -9,6 +9,9 @@ import { SceneBoundary } from './boundaries';
 // index.html stays up until the canvas has drawn a frame.
 const App = lazy(() =>
   import('./App').catch((error: unknown) => {
+    // A failed download is a TypeError; anything else threw while App was
+    // evaluating, which is a crash, not a connection problem.
+    if (!(error instanceof TypeError)) throw error;
     const reason = error instanceof Error ? error.message : String(error);
     throw new ChunkLoadError(`Scene chunk failed to load: ${reason}`, { cause: error });
   }),
