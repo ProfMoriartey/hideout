@@ -77,7 +77,7 @@ export const MEMBERS = [
     room: 'pipes and machinery',
     prop: 'wrench and pipes',
     station: 'machinery',
-    slot: { col: 2, floor: 0 },
+    slot: { col: 2, floor: 4 },
     colors: { primary: 0x4b5a3c, secondary: 0x8a6a4a, accent: 0xffc861 },
   },
   {

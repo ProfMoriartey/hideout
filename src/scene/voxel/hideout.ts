@@ -52,7 +52,7 @@ function hexToLinear(hex: number): Vec3 {
   return [f((hex >> 16) & 255), f((hex >> 8) & 255), f(hex & 255)];
 }
 
-export function mixColor(a: number, b: number, t: number): number {
+function mixColor(a: number, b: number, t: number): number {
   const ch = (s: number) => Math.round(((a >> s) & 255) * (1 - t) + ((b >> s) & 255) * t);
   return (ch(16) << 16) | (ch(8) << 8) | ch(0);
 }

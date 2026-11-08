@@ -253,21 +253,39 @@ test.describe('touch', () => {
     expect(zoomedOut.lit.count).toBeLessThan(start.lit.count);
   });
 
-  test('two fingers moving together pan (spec: two-finger pan)', async ({ page }) => {
+  test('two fingers moving together rotate, inside the clamp', async ({ page }) => {
     await page.goto('./');
-    const start = await settle(page);
+    await settle(page);
     const { x, y } = center(page);
-    const f = (dy: number) => [
-      { x: x - 30, y: y + dy },
-      { x: x + 30, y: y + dy },
+    const f = (dx: number) => [
+      { x: x - 30 + dx, y },
+      { x: x + 30 + dx, y },
     ];
-    await touchGesture(page, f(0), f(-40));
-    const { lit } = await settle(page);
-    expect(lit.y0).toBeLessThan(start.lit.y0 - 10);
-    expect(Math.abs(lit.y1 - lit.y0 - (start.lit.y1 - start.lit.y0))).toBeLessThan(
-      start.lit.h * 0.02,
-    );
+    const angles = () => page.evaluate(() => window.__hideoutStats);
+    await touchGesture(page, f(0), f(60));
+    await expect.poll(async () => (await angles())?.azimuth).toBeLessThan(0.42 - 0.01);
+    // A huge drag the same way stops at the azimuth limit (0.42 - 0.55), never past it.
+    await touchGesture(page, f(-150), f(150));
+    await expect.poll(async () => (await angles())?.azimuth).toBeCloseTo(0.42 - 0.55, 1);
+    expect((await angles())?.azimuth).toBeGreaterThanOrEqual(0.42 - 0.55 - 1e-6);
   });
+});
+
+test('zoom is re-clamped when the phone is rotated after zooming in', async ({ page }) => {
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.goto('./');
+  await settle(page);
+  for (let i = 0; i < 80; i++) await page.mouse.wheel(0, -600);
+  const stats = () => page.evaluate(() => window.__hideoutStats);
+  await expect
+    .poll(async () => (await stats())?.zoom)
+    .toBeCloseTo((await stats())?.maxZoom ?? 0, 3);
+  const portraitMax = (await stats())?.maxZoom ?? 0;
+  await page.setViewportSize({ width: 915, height: 412 });
+  await expect.poll(async () => (await stats())?.maxZoom).not.toBeCloseTo(portraitMax, 3);
+  const s = await stats();
+  expect(s?.zoom).toBeLessThanOrEqual((s?.maxZoom ?? 0) + 1e-6);
+  expect(s?.zoom).toBeGreaterThanOrEqual((s?.minZoom ?? 0) - 1e-6);
 });
 
 test.describe('motion and console', () => {

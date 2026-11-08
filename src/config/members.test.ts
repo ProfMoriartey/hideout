@@ -47,9 +47,10 @@ describe('members config', () => {
     expect(MEMBER_BY_ID.elders.slot.col).not.toBe(1);
   });
 
-  it('every Spider is above the ground floor except one basement room', () => {
+  it('keeps all 11 Spiders above the ground floor', () => {
     const spiders = MEMBERS.filter((m) => m.id !== 'chrollo' && m.id !== 'elders');
-    expect(spiders.filter((m) => m.slot.floor === 0)).toHaveLength(1);
+    expect(spiders).toHaveLength(11);
+    expect(spiders.every((m) => m.slot.floor > 0)).toBe(true);
   });
 
   it('has unique stations, a prop and valid colours for everyone', () => {
