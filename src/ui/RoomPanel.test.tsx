@@ -91,11 +91,12 @@ describe('RoomPanel', () => {
     for (const s of ['forging', 'Mission', 'Running', 'Tickets']) expect(t).not.toContain(s);
   });
 
-  it('says so when stale, and survives a zero total', () => {
+  it('says so when stale (no running time), and survives a zero total', () => {
     const el = open({ display: 'stale', runningFor: '5 h 2 min', progress: { done: 0, total: 0 } });
     const bar = el.ownerDocument.querySelector('.room-bar > span');
     expect(el.ownerDocument.body.textContent).toContain('No recent update');
     expect(bar?.getAttribute('style')).toContain('0%');
+    expect(el.ownerDocument.body.textContent).not.toContain('Running');
   });
 
   it('closes with the button and Escape, restoring focus and the view', () => {

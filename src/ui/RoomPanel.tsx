@@ -37,7 +37,7 @@ function Details({ m }: { m: MemberView }) {
           <dd>Operation {m.mission}</dd>
         </>
       )}
-      {m.runningFor && (
+      {m.runningFor && m.display === 'working' && (
         <>
           <dt>Running</dt>
           <dd>{m.runningFor}</dd>

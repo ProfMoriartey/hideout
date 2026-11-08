@@ -4,6 +4,7 @@
   inset: 0;
   z-index: 4;
   overflow: hidden;
+  visibility: hidden; /* until the first placement */
   pointer-events: none; /* drags pan the scene; taps are picked on the canvas */
 }
 .room-label {
@@ -51,7 +52,7 @@
 .room-labels[data-plaque] .room-label .room-plaque {
   display: block;
 }
-.room-panel {
+.ov.room-panel {
   top: calc(max(8px, env(safe-area-inset-top)) + 7rem); /* below the mission banner */
   right: 8px;
   width: min(20rem, calc(100vw - 16px));
@@ -80,6 +81,7 @@
   opacity: 0.85;
 }
 .room-close {
+  pointer-events: auto;
   position: absolute;
   top: 2px;
   right: 2px;

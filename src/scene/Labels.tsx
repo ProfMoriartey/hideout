@@ -146,6 +146,7 @@ export function Labels() {
     let changed = last[16] !== cam.zoom || last[17] !== size.width || last[18] !== size.height;
     for (let i = 0; i < 16 && !changed; i++) changed = last[i] !== m[i];
     if (!changed) return;
+    layer.style.visibility = 'visible';
     for (let i = 0; i < 16; i++) last[i] = m[i] ?? 0;
     last[16] = cam.zoom;
     last[17] = size.width;
