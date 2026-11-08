@@ -19,14 +19,17 @@ the configure/deploy step; nothing else is affected.
 
 Runs on every pull request and on every push to a branch other than `main`:
 
-1. Node 20 via `actions/setup-node` with the npm cache, then `npm ci`.
-2. `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`.
+1. Node 22 via `actions/setup-node` with the npm cache, then `npm ci`.
+2. `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, then
+   `npm run size` (bundle size budget).
 3. `npx playwright install --with-deps chromium`, then
-   `npm run e2e -- --trace off` (desktop and phone projects).
+   `npm run e2e` (desktop and phone projects; the script turns tracing off).
 4. Artifacts: `e2e-screenshots` (`e2e/screenshots/`, always uploaded) and
-   `playwright-report` (only when a step failed). Kept 14 days.
+   `playwright-report` (`playwright-report/`, only when a step failed). Kept 14 days.
 
-Newer runs on the same branch cancel older ones that are still running.
+CI runs once per commit: runs share a concurrency group keyed on the branch
+(`github.head_ref || github.ref_name`), so the push run and the pull request run
+for the same commit do not both finish, and a newer commit cancels an older run.
 
 ### `.github/workflows/deploy.yml` (Pages)
 

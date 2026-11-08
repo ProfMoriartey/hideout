@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#0b0a10" />
     <meta name="description" content="The Hideout: a live voxel map of who is at work right now." />
     <title>The Hideout</title>
+    <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
     <style>
       html,
       body,
@@ -59,6 +60,24 @@
           opacity: 0.7;
         }
       }
+      #boot.boot-error .lantern {
+        animation: none;
+        opacity: 0.45;
+      }
+      #boot p {
+        max-width: 22rem;
+        padding: 0 1rem;
+        text-align: center;
+      }
+      #boot button {
+        font: inherit;
+        color: #0b0a10;
+        background: #ffb347;
+        border: 0;
+        border-radius: 6px;
+        padding: 0.5rem 1.4rem;
+        cursor: pointer;
+      }
       @media (prefers-reduced-motion: reduce) {
         #boot .lantern {
           animation: none;
@@ -71,6 +90,16 @@
       <div class="lantern"></div>
       <p>Entering the Hideout...</p>
     </div>
+    <noscript>
+      <style>
+        #boot .lantern {
+          animation: none;
+        }
+      </style>
+      <p style="position: fixed; bottom: 2rem; width: 100%; margin: 0; text-align: center">
+        The Hideout needs JavaScript to open.
+      </p>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
