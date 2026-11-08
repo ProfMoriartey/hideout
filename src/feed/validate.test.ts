@@ -147,6 +147,10 @@ describe('validateFeed', () => {
     expect(rejects(setProgress({ done: 1.5, total: 5 }))).toBe(true);
     expect(rejects(setProgress({ done: 1, total: 1000 }))).toBe(true);
     expect(rejects(setProgress({ done: '1', total: 5 }))).toBe(true);
+    expect(rejects(setProgress({ done: 6, total: 5 }))).toBe(true);
+    expect(rejects((f) => (first(f.missions).tickets = { done: 11, total: 10 }))).toBe(true);
+    expect(validateFeed({ ...goodFeed(), missions: [] }).ok).toBe(true);
+    expect(rejects(setProgress({ done: 5, total: 5 }))).toBe(false);
     expect(rejects((f) => (f.updatedAt = '2026-11-08 12:00'))).toBe(true);
     expect(rejects((f) => (member(f, 'machi').updatedAt = 'yesterday'))).toBe(true);
     expect(rejects((f) => (f.updatedAt = '2026-13-45T99:99:99Z'))).toBe(true);
