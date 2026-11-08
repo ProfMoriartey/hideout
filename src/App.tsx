@@ -5,10 +5,12 @@ import { MEMBER_BY_ID } from './config/members';
 import { getFeedStore } from './feed/store';
 import { CameraRig } from './scene/CameraRig';
 import { Hideout } from './scene/Hideout';
+import { Labels } from './scene/Labels';
 import { Members } from './scene/members/Members';
 import { RoomLights } from './scene/RoomLights';
 import { Footer } from './ui/Footer';
 import { MissionBanner } from './ui/MissionBanner';
+import { RoomPanel } from './ui/RoomPanel';
 import { SoundToggle } from './ui/SoundToggle';
 import { Ticker } from './ui/Ticker';
 
@@ -41,6 +43,7 @@ export default function App() {
           <Members />
           <RoomLights />
           {/* [slot 5 Labels] <Labels /> */}
+          <Labels />
           {/* [slot 8 Performance] <PerfMonitor /> */}
         </Canvas>
       </SceneBoundary>
@@ -49,6 +52,7 @@ export default function App() {
           boundary: one that throws disappears, the scene keeps running. */}
       <OverlayBoundary>
         {/* [slot 5 Panel] <RoomPanel /> */}
+        <RoomPanel />
         {/* [slot 6 Global UI] Freshness is mounted inside Footer */}
         <MissionBanner />
         <Ticker />
