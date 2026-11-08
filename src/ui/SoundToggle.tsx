@@ -1,5 +1,5 @@
 // Written by Chrollo
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { readSoundPref, writeSoundPref } from '../audio/pref';
 import './sound.css';
 
@@ -27,25 +27,10 @@ function apply(next: boolean): Promise<void> {
 export function SoundToggle() {
   const [on, setOn] = useState(readSoundPref);
 
-  // A remembered "on" cannot start audio by itself (autoplay policy): the first
-  // gesture anywhere on the page does. The toggle's own click then flips it.
-  useEffect(() => {
-    if (!readSoundPref()) return;
-    const cleanup = () => {
-      document.removeEventListener('pointerup', arm);
-      document.removeEventListener('keydown', arm);
-    };
-    const arm = () => {
-      cleanup();
-      if (readSoundPref()) apply(true).catch(() => setOn(false));
-    };
-    document.addEventListener('pointerup', arm);
-    document.addEventListener('keydown', arm);
-    return cleanup;
-  }, []); // mount only: later toggles are user gestures themselves
-
   const toggle = () => {
-    const next = !on;
+    // A remembered "on" cannot start audio by itself (autoplay policy): the first
+    // click starts it and keeps the button on; after that a click flips the state.
+    const next = on && !ctx ? true : !on;
     setOn(next);
     writeSoundPref(next);
     // A failed chunk or AudioContext must not leave the button saying "on".
