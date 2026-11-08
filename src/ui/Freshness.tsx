@@ -8,7 +8,7 @@ const NOTE = {
   live: '',
   'stale-source': 'Updates are slow right now.',
   offline: 'Offline, retrying.',
-  error: 'Feed unavailable, showing the last update.',
+  error: 'Feed unavailable.',
 } as const;
 
 /** "Updated N s ago" (clamped at 0) plus a calm note when the feed is not live. */
@@ -20,7 +20,7 @@ export function Freshness() {
     <p className="ov-fresh">
       {age}
       {/* Announced once per change, not every second. */}
-      <span role="status"> {NOTE[status]}</span>
+      <span role="status">{NOTE[status] && ` - ${NOTE[status]}`}</span>
     </p>
   );
 }

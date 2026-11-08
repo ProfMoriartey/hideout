@@ -4,7 +4,8 @@ import './overlay.css';
 /** Active mission, by codename and ticket count only. */
 export function MissionBanner() {
   const { derived } = useFeed();
-  const active = derived.missions.filter((m) => m.state === 'active');
+  // Capped: the validator allows 10 missions, a phone portrait screen cannot show them.
+  const active = derived.missions.filter((m) => m.state === 'active').slice(0, 3);
   if (active.length === 0) return null;
   return (
     <div className="ov ov-banner" role="region" aria-label="Active missions">

@@ -244,7 +244,7 @@ test.describe('offline and error states', () => {
       }),
     );
     await boot(page, '');
-    await expect(page.getByText('Feed unavailable, showing the last update.')).toBeVisible();
+    await expect(page.getByText('Feed unavailable.')).toBeVisible();
     const t = await text(page);
     expect(t).not.toMatch(RAW_LEAK);
     expect(t).not.toContain('boom');
