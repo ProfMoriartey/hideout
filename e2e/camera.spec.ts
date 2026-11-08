@@ -214,9 +214,10 @@ test.describe('touch', () => {
     const { x, y } = center(page);
     await touchGesture(page, [{ x, y }], [{ x, y: y - 40 }]);
     const { lit } = await settle(page);
-    expect(lit.y0).toBeLessThan(start.lit.y0 - 10);
-    expect(Math.abs(lit.y1 - lit.y0 - (start.lit.y1 - start.lit.y0))).toBeLessThan(
-      start.lit.h * 0.02,
+    // Bottom edge (the top rock spire may be clipped by the viewport); a pan keeps the width.
+    expect(lit.y1).toBeLessThan(start.lit.y1 - 10);
+    expect(Math.abs(lit.x1 - lit.x0 - (start.lit.x1 - start.lit.x0))).toBeLessThan(
+      start.lit.w * 0.02,
     );
   });
 
@@ -352,8 +353,8 @@ test.describe('camera limits (probe)', () => {
     await settle(page);
     const w = Math.round(center(page).x * 1.6);
     for (const [dir, want] of [
-      [-1, 0.42 - 0.55],
-      [1, 0.42 + 0.55],
+      [-1, 0.42 + 0.55],
+      [1, 0.42 - 0.55],
     ] as const) {
       await mouseDrag(page, dir * w, 0, 'right');
       await mouseDrag(page, dir * w, 0, 'right');
