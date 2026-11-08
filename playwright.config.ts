@@ -14,7 +14,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? 'github' : 'list',
+  reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: `http://localhost:${PORT}/hideout/`,
     trace: 'off',
@@ -34,7 +34,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    // Serves the production build (run `npm run build` first) at /hideout/.
+    // Serves the production build at /hideout/ (`npm run e2e` builds first via pree2e).
     command: `npx vite preview --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}/hideout/`,
     reuseExistingServer: !process.env.CI,
