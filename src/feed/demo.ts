@@ -77,6 +77,7 @@ function memberAt(
     return {
       state: 'working',
       since: iso(phaseStart(WORK_START)),
+      updatedAt: iso(at(step)),
       verb,
       mission: missionFor(i),
       progress: { done: phase - WORK_START + 1, total: WORK_END - WORK_START + 2 },
@@ -86,7 +87,8 @@ function memberAt(
     return { state: 'done', since: iso(phaseStart(DONE_PHASE)), verb, mission: missionFor(i) };
   }
   if (phase === STALE_PHASE) {
-    return { state: 'working', since: iso(at(step) - STALE_AGE_MS), verb };
+    const old = iso(at(step) - STALE_AGE_MS);
+    return { state: 'working', since: old, updatedAt: old, verb };
   }
   const idleStart = phase < WORK_START ? -1 : phase === DONE_PHASE + 1 ? DONE_PHASE + 1 : phase;
   return { state: 'idle', since: iso(phaseStart(idleStart)) };

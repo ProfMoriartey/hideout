@@ -18,7 +18,7 @@ function goodFeed(): Record<string, unknown> {
         mission: 'Silk Lantern',
         progress: { done: 2, total: 5 },
       },
-      machi: { state: 'idle', since: '2026-11-08T11:00:00.123Z' },
+      machi: { state: 'idle', since: '2026-11-08T11:00:00.123Z', updatedAt: T },
     },
     events: [
       { at: T, who: 'feitan', kind: 'start', verb: 'interrogating', mission: 'Silk Lantern' },
@@ -148,6 +148,7 @@ describe('validateFeed', () => {
     expect(rejects(setProgress({ done: 1, total: 1000 }))).toBe(true);
     expect(rejects(setProgress({ done: '1', total: 5 }))).toBe(true);
     expect(rejects((f) => (f.updatedAt = '2026-11-08 12:00'))).toBe(true);
+    expect(rejects((f) => (member(f, 'machi').updatedAt = 'yesterday'))).toBe(true);
     expect(rejects((f) => (f.updatedAt = '2026-13-45T99:99:99Z'))).toBe(true);
   });
 

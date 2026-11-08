@@ -20,6 +20,7 @@ export type FeedMemberState = 'idle' | 'working' | 'done';
 export type MemberStatus = {
   state: FeedMemberState;
   since: string;
+  updatedAt?: string;
   verb?: string;
   mission?: string;
   progress?: Count;

@@ -12,7 +12,7 @@ import type {
 
 export type DisplayState = 'idle' | 'working' | 'done' | 'stale';
 
-/** Working with no update for longer than this shows as stale. */
+/** Working with no write (updatedAt, else since) for longer than this shows as stale. */
 export const STALE_AFTER_MS = 3 * 60 * 60 * 1000;
 /** A done whose `since` is newer than this still celebrates (e.g. on page load). */
 export const RECENT_DONE_MS = 8000;
@@ -72,8 +72,11 @@ export function displayState(
   switch (status.state) {
     case 'idle':
       return 'idle';
-    case 'working':
-      return age > STALE_AFTER_MS ? 'stale' : 'working';
+    case 'working': {
+      // Stale counts from the last write, so long jobs with progress stay lit.
+      const quiet = now - Date.parse(status.updatedAt ?? status.since);
+      return quiet > STALE_AFTER_MS ? 'stale' : 'working';
+    }
     case 'done':
       if (age < RECENT_DONE_MS) return 'done';
       return celebrateUntil !== undefined && now < celebrateUntil ? 'done' : 'idle';

@@ -166,11 +166,17 @@ function parseMission(v: unknown, path: string): Mission {
 }
 
 function parseMember(v: unknown, path: string): MemberStatus {
-  const o = obj(v, path, ['state', 'since', 'verb', 'mission', 'progress'], ['state', 'since']);
+  const o = obj(
+    v,
+    path,
+    ['state', 'since', 'updatedAt', 'verb', 'mission', 'progress'],
+    ['state', 'since'],
+  );
   const m: MemberStatus = {
     state: oneOf(o.state, `${path}.state`, MEMBER_STATES),
     since: time(o.since, `${path}.since`),
   };
+  if (o.updatedAt !== undefined) m.updatedAt = time(o.updatedAt, `${path}.updatedAt`);
   if (o.verb !== undefined) m.verb = verb(o.verb, `${path}.verb`);
   if (o.mission !== undefined) m.mission = mission(o.mission, `${path}.mission`);
   if (o.progress !== undefined) m.progress = count(o.progress, `${path}.progress`);

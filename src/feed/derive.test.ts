@@ -34,6 +34,28 @@ describe('displayState', () => {
     expect(displayState({ state: 'working', since: iso(3 * H + 1) }, NOW)).toBe('stale');
   });
 
+  it('stale uses updatedAt when present, falling back to since', () => {
+    const fresh: MemberStatus = {
+      state: 'working',
+      since: iso(4 * H),
+      updatedAt: iso(10 * 60_000),
+    };
+    expect(displayState(fresh, NOW)).toBe('working');
+    expect(displayState({ ...fresh, updatedAt: iso(3 * H + 1) }, NOW)).toBe('stale');
+    expect(displayState({ ...fresh, updatedAt: iso(3 * H) }, NOW)).toBe('working');
+  });
+
+  it('running time still counts from since when updatedAt is newer', () => {
+    const d = derive(
+      feed({
+        members: { feitan: { state: 'working', since: iso(4 * H), updatedAt: iso(60_000) } },
+      }),
+      {},
+      NOW,
+    );
+    expect(d.members.feitan).toMatchObject({ display: 'working', runningFor: '4 h 0 min' });
+  });
+
   it('done celebrates while since is under 8 s old, then idles', () => {
     const done = (ago: number): MemberStatus => ({ state: 'done', since: iso(ago) });
     expect(displayState(done(0), NOW)).toBe('done');
