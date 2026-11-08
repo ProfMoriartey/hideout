@@ -276,3 +276,18 @@ describe('validateFeed', () => {
     }
   });
 });
+
+describe('impossible calendar dates', () => {
+  it('rejects timestamps Date would roll over', () => {
+    for (const bad of ['2026-02-31T00:00:00Z', '2026-11-08T24:00:00Z', '2026-13-01T00:00:00Z']) {
+      const r = validateFeed({
+        version: 1,
+        updatedAt: bad,
+        missions: [],
+        members: {},
+        events: [],
+      });
+      expect(r.ok).toBe(false);
+    }
+  });
+});

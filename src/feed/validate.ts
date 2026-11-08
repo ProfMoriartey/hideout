@@ -108,6 +108,10 @@ function time(v: unknown, path: string): string {
   if (typeof v !== 'string' || !TIME_RE.test(v) || Number.isNaN(Date.parse(v))) {
     fail(path, 'expected an ISO-8601 UTC timestamp');
   }
+  // Date rolls 2026-02-31 over to March; a real timestamp survives the round trip.
+  if (new Date(v).toISOString().slice(0, 19) !== v.slice(0, 19)) {
+    fail(path, 'expected an ISO-8601 UTC timestamp');
+  }
   return v;
 }
 
