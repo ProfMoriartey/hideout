@@ -24,7 +24,8 @@ test('page loads, canvas renders, no console errors', async ({ page }, testInfo)
   expect(errors).toEqual([]);
 });
 
-test('scene chunk fails: neutral message with a working Retry', async ({ page }) => {
+test('scene chunk fails: neutral message with a working Retry', async ({ page, consoleErrors }) => {
+  consoleErrors.allow(/ERR_FAILED|dynamically imported module/);
   let fail = true;
   await page.route('**/assets/App-*.js', (route) => (fail ? route.abort() : route.continue()));
 

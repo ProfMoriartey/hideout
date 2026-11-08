@@ -4,6 +4,10 @@ import { expect, sceneReady, test } from './support/fixtures';
 // Ticket 3: default view, camera limits and gestures. The camera is not
 // exposed to the page, so every check looks at the rendered canvas.
 
+// Idle figures breathe (ticket 4), so the canvas only holds still under
+// reduced motion; the camera itself behaves the same either way.
+test.use({ reducedMotion: 'reduce' });
+
 type Lit = { x0: number; y0: number; x1: number; y1: number; count: number; w: number; h: number };
 
 // Waits until the loader is gone and the canvas has stopped changing, then
