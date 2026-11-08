@@ -5,6 +5,7 @@ import { CameraRig } from './scene/CameraRig';
 import { Hideout } from './scene/Hideout';
 import { Footer } from './ui/Footer';
 import { MissionBanner } from './ui/MissionBanner';
+import { SoundToggle } from './ui/SoundToggle';
 import { Ticker } from './ui/Ticker';
 
 // Composition root. Loaded lazily from main.tsx, so everything imported here
@@ -44,7 +45,7 @@ export default function App() {
         <MissionBanner />
         <Ticker />
         <Footer />
-        {/* [slot 7 Sound] <SoundToggle /> */}
+        <SoundToggle /> {/* [slot 7 Sound] */}
       </OverlayBoundary>
     </>
   );
