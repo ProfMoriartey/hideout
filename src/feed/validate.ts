@@ -132,10 +132,11 @@ function int(v: unknown, path: string, min: number, max: number): number {
 
 function count(v: unknown, path: string): Count {
   const o = obj(v, path, ['done', 'total'], ['done', 'total']);
-  return {
-    done: int(o.done, `${path}.done`, 0, 999),
-    total: int(o.total, `${path}.total`, 1, 999),
-  };
+  const done = int(o.done, `${path}.done`, 0, 999);
+  const total = int(o.total, `${path}.total`, 1, 999);
+  // Stricter than the JSON Schema, matching bin/hideout in the feed repo.
+  if (done > total) fail(path, 'done is greater than total');
+  return { done, total };
 }
 
 function list(v: unknown, path: string, max: number): unknown[] {
