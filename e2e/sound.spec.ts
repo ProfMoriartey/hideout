@@ -274,7 +274,9 @@ test.describe('remembered choice', () => {
     expect(await stored(page)).toBe('on');
 
     requests.length = 0;
+    await page.clock.resume();
     await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-scene', 'ready');
     await expect(toggleOf(page)).toBeVisible();
     await expect(toggleOf(page)).toHaveAttribute('aria-pressed', 'true');
     await expect(toggleOf(page)).toHaveAccessibleName('Sound');
