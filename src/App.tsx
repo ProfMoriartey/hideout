@@ -3,6 +3,8 @@ import { hideBootScreen } from './boot';
 import { OverlayBoundary, SceneBoundary } from './boundaries';
 import { MEMBER_BY_ID } from './config/members';
 import { getFeedStore } from './feed/store';
+import { PerfMonitor } from './perf/PerfMonitor';
+import { DPR_MAX, deviceTier } from './perf/quality';
 import { CameraRig } from './scene/CameraRig';
 import { Hideout } from './scene/Hideout';
 import { Labels } from './scene/Labels';
@@ -26,8 +28,8 @@ export default function App() {
       <SceneBoundary>
         <Canvas
           style={{ position: 'fixed', inset: 0 }}
-          // Ticket 8 (performance) owns DPR and quality tiers; placeholder cap.
-          dpr={[1, 1.5]}
+          // Starting tier's cap (1.5 on touch devices, 2 elsewhere); PerfMonitor lowers it on low fps.
+          dpr={[1, DPR_MAX[deviceTier()]]}
           gl={{ antialias: false, powerPreference: 'high-performance' }}
           camera={{ position: [3, 3, 3], fov: 45 }}
           onCreated={() => requestAnimationFrame(() => hideBootScreen())}
@@ -45,6 +47,7 @@ export default function App() {
           {/* [slot 5 Labels] <Labels /> */}
           <Labels />
           {/* [slot 8 Performance] <PerfMonitor /> */}
+          <PerfMonitor />
         </Canvas>
       </SceneBoundary>
 

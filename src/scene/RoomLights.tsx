@@ -2,7 +2,7 @@
 // per frame, steps the shared levels and tints that room's baked materials
 // (dim when idle or stale, lit when working, a burst on done). No real lights.
 
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect } from 'react';
 import { MEMBERS, type MemberId } from '../config/members';
 import { useMember } from '../feed/useFeed';
@@ -16,9 +16,12 @@ const GLOW_IDLE = 0.3;
 
 function Watch({ id, index }: { id: MemberId; index: number }) {
   const { display } = useMember(id);
+  const invalidate = useThree((s) => s.invalidate);
   useEffect(() => {
     levels.display[index] = display;
-  }, [display, index]);
+    // On-demand rendering (reduced motion, low tier) needs a frame to show the new state.
+    invalidate();
+  }, [display, index, invalidate]);
   return null;
 }
 
