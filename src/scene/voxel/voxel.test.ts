@@ -155,6 +155,19 @@ describe('hideout', () => {
     }
   });
 
+  it('keeps shell rock and roofs out of every room interior', () => {
+    const { grid } = buildHideoutGrid();
+    for (const m of MEMBERS) {
+      const { min, max } = roomBox(m.slot);
+      let shell = 0;
+      for (let x = min[0]; x < max[0]; x++)
+        for (let y = min[1]; y < max[1]; y++)
+          for (let z = min[2]; z < max[2]; z++)
+            if (grid.groupAt(x, y, z) === 0) shell += grid.has(x, y, z) ? 1 : 0;
+      expect(shell, m.id).toBe(0);
+    }
+  });
+
   it('exports anchors inside each room for every member', () => {
     for (const id of MEMBER_IDS) {
       const a = ROOM_ANCHORS[id];

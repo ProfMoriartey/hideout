@@ -49,6 +49,7 @@ export function buildSilk(): BufferGeometry {
   const lines: number[] = [];
   const front = SLAB_D + 0.6;
   const topY = (FLOORS - 1) * PITCH_Y;
+  const topR = FLOORS * PITCH_Y; // right column is one floor taller
   // Strands hanging between pillar tops on each floor.
   for (let f = 0; f < FLOORS - 1; f++) {
     const y = (f + 1) * PITCH_Y - 0.2;
@@ -60,10 +61,10 @@ export function buildSilk(): BufferGeometry {
   }
   // Long diagonals from the cliff into the hall.
   strand(lines, [HALL_X0 - 3, topY + 5, 4], [HALL_X0 + PITCH_X, topY - 2, front], 2.5, 18);
-  strand(lines, [HALL_X1 + 3, topY + 4, 4], [HALL_X1 - PITCH_X, topY - 4, front], 2, 18);
+  strand(lines, [HALL_X1 + 3, topR + 4, 4], [HALL_X1 - PITCH_X, topR + 1, front], 2, 18);
   // Webs in the cave corners above the side roofs.
   web(lines, [HALL_X0 + 5, topY + 6.5, 3.5], 4.5, 10, 5);
-  web(lines, [HALL_X1 - 4, topY + 5.5, 3.5], 3.2, 8, 4);
+  web(lines, [HALL_X1 - 4, topR + 5.5, 3.5], 3.2, 8, 4);
   const g = new BufferGeometry();
   g.setAttribute('position', new BufferAttribute(new Float32Array(lines), 3));
   g.computeBoundingSphere();

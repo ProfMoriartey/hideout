@@ -145,6 +145,7 @@ function shellOps(): { ops: VoxelOp[]; lights: BakedLight[] } {
   const ops: VoxelOp[] = [];
   const lights: BakedLight[] = [];
   const topY = (FLOORS - 1) * PITCH_Y; // roof of the side columns, floor of the tower
+  const topR = FLOORS * PITCH_Y; // the right column has a fifth floor (Franklin)
   const towerX0 = HALL_X0 + PITCH_X; // left tower wall
   const towerX1 = HALL_X0 + 2 * PITCH_X; // right tower wall
   const rock = (x: number, y: number, z: number): VoxelOp => ({
@@ -157,12 +158,13 @@ function shellOps(): { ops: VoxelOp[]; lights: BakedLight[] } {
   for (let c = 0; c <= COLS; c++) {
     const x = HALL_X0 + c * PITCH_X;
     const tower = x === towerX0 || x === towerX1;
-    const h = tower ? FLOORS * PITCH_Y + 1 : topY + 1;
+    const h = tower || c === COLS ? FLOORS * PITCH_Y + 1 : topY + 1;
     ops.push({ at: [x, 0, 0], size: [1, h, SLAB_D], color: STONE, jitter: 0.12 });
   }
   // Side roofs and the tower roof.
   ops.push({ at: [HALL_X0, topY, 0], size: [PITCH_X, 1, SLAB_D], color: STONE, jitter: 0.1 });
   ops.push({ at: [towerX1, topY, 0], size: [PITCH_X + 1, 1, SLAB_D], color: STONE, jitter: 0.1 });
+  ops.push({ at: [towerX1, topR, 0], size: [PITCH_X + 1, 1, SLAB_D], color: STONE, jitter: 0.1 });
   ops.push({
     at: [towerX0, FLOORS * PITCH_Y, 0],
     size: [PITCH_X + 1, 1, SLAB_D],
@@ -179,14 +181,16 @@ function shellOps(): { ops: VoxelOp[]; lights: BakedLight[] } {
     const fromTower = x <= towerX0 ? towerX0 - x : x - towerX1;
     const h = 1 + Math.floor(fromTower * 0.38 + hash3(x, 7, 1) * 2.2);
     const depth = 4 + Math.floor(hash3(x, 3, 9) * 3) + (fromTower > 3 ? 2 : 0);
-    for (let y = topY + 1; y <= topY + h; y++)
-      for (let z = 0; z < Math.min(depth - (y - topY) * 0.3, SLAB_D); z++) ops.push(rock(x, y, z));
+    const base = x > towerX1 ? topR : topY;
+    for (let y = base + 1; y <= base + h; y++)
+      for (let z = 0; z < Math.min(depth - (y - base) * 0.3, SLAB_D); z++) ops.push(rock(x, y, z));
   }
 
   // Cliff rock on both sides, ragged at the front.
-  for (let y = -4; y <= topY + 7; y++) {
-    const top = y > topY ? 1 - (y - topY) / 9 : 1;
+  for (let y = -4; y <= topR + 7; y++) {
     for (const side of [-1, 1] as const) {
+      const base = side < 0 ? topY : topR;
+      const top = y > base ? Math.max(0, 1 - (y - base) / 9) : 1;
       const thick = Math.max(1, Math.round((3 + hash3(side, y >> 1, 4) * 4) * top));
       for (let i = 1; i <= thick; i++) {
         const x = side < 0 ? HALL_X0 - i : HALL_X1 - 1 + i;
@@ -201,6 +205,12 @@ function shellOps(): { ops: VoxelOp[]; lights: BakedLight[] } {
       const front = SLAB_D + Math.floor(hash3(x >> 1, y, 5) * 2.5) - (y === -1 ? 1 : 0);
       for (let z = 0; z <= front; z++) ops.push(rock(x, y, z));
     }
+
+  // The free ground-floor slot is solid rock, not a hole.
+  const free = roomBox({ col: COLS - 1, floor: 0 });
+  for (let y = free.min[1]; y < free.max[1]; y++)
+    for (let x = free.min[0]; x < free.max[0]; x++)
+      for (let z = 0; z < SLAB_D; z++) ops.push(rock(x, y, z));
 
   // Hanging lanterns on the inner pillar fronts, one per floor, and two on the tower.
   const lantern = (x: number, y: number) => {
