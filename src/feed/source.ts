@@ -315,10 +315,11 @@ export function createFeedSource(options: SourceOptions): FeedSource {
     if (visibility.hidden()) {
       if (timer !== null) clock.clearTimeout(timer);
       timer = null;
-    } else if (snap.status === 'offline' && clock.now() - lastTickAt >= OFFLINE_RETRY_GAP_MS) {
-      // Back online (or back in the tab) after failures: retry now, not after the backoff.
+    } else if (snap.status === 'offline') {
+      // Back online (or back in the tab) after failures: retry soon, not after the backoff,
+      // but never faster than the gap, so flapping events cannot hammer the network.
       failures = 0;
-      void tick();
+      schedule(Math.max(0, lastTickAt + OFFLINE_RETRY_GAP_MS - clock.now()));
     } else {
       // Rapid tab switches must not burn the API budget: wait for the poll already due.
       schedule(Math.max(0, nextAt - clock.now()));

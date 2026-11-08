@@ -883,6 +883,25 @@ describe('feed source: visibility and lifecycle', () => {
     t.source.stop();
   });
 
+  it('defers, not drops, an online event that arrives right after a failure', async () => {
+    let down = true;
+    const t = setup((url, headers) => {
+      if (down) throw new TypeError('Failed to fetch');
+      if (url === API) return headers['If-None-Match'] ? res(304) : res(200, SHA1);
+      return json(doc('2026-11-08T11:00:00Z'));
+    });
+    t.source.start();
+    await t.clock.advance(3000);
+    down = false;
+    t.visibility.set(false);
+    await t.clock.advance(1999);
+    expect(t.apiCalls()).toHaveLength(1);
+    await t.clock.advance(1);
+    expect(t.apiCalls()).toHaveLength(2);
+    expect(t.last().status).toBe('live');
+    t.source.stop();
+  });
+
   it('a second start() is a no-op and a restart after stop() polls once', async () => {
     const t = setup(base);
     t.source.start();

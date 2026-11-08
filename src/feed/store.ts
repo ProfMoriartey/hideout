@@ -29,8 +29,8 @@ import { MEMBER_IDS } from './validate';
 export const DEFAULT_SEED = 1;
 /** Larger setTimeout delays overflow and fire at once (a far-future timestamp would spin). */
 const MAX_TIMEOUT_MS = 2 ** 31 - 1;
-/** Date's range; a demo origin beyond it cannot be formatted. */
-const MAX_DATE_MS = 8.64e15;
+/** A demo origin beyond this cannot be formatted. */
+const MAX_DATE_MS = 1e15; // well inside Date's 8.64e15, leaving room for origin minus 2 h
 
 export type FeedStatus = Pick<FeedSnapshot, 'status' | 'source' | 'lastUpdated'>;
 export type StoreState = { snap: FeedSnapshot; celebrations: Celebrations; nameOf: NameOf };
