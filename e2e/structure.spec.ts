@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './support/fixtures';
 
 // Budget from docs/ARCHITECTURE.md: under ~60 draw calls for the whole scene.
 const DRAW_CALL_BUDGET = 60;

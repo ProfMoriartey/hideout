@@ -47,7 +47,8 @@ void main() {
   int m = int(info.x + 0.5);
   float work = uWork[m];
   float cel = uCelebrate[m];
-  float awake = max(work, cel);
+  // Under reduced motion the done glow is light only; the pose stays put.
+  float awake = max(work, cel * uMotion);
   float wave = sin(uTime * abs(motion.y) + motion.z) * uMotion;
   float amount = mix(motion.w, axis.w, awake) + motion.x * wave * work;
   vec3 p = position;
@@ -87,7 +88,7 @@ void main() {
   float a = uWork[m] * uMotion * (1.0 - f) * smoothstep(0.0, 0.15, f);
   if (c > 0.02) {
     // Done: the same points burst outwards and fade with the celebration.
-    p = position + vec3(seed.z, 0.6 + seed.y, seed.w) * (1.0 - c) * 2.6;
+    p = position + vec3(seed.z, 0.6 + seed.y, seed.w) * (1.0 - c) * 1.6;
     a = c;
   }
   vColor = color;
@@ -134,7 +135,6 @@ export function Members() {
       sparks: buildSparks(arts),
       castMat: cast,
       sparkMat: sparks,
-      shared,
     };
   }, []);
   useEffect(

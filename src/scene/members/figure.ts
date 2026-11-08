@@ -32,6 +32,7 @@ export type Motion = {
   readonly phase?: number;
   readonly rest?: number;
   readonly offset?: number;
+  /** Encoded for the shader as a negative speed, so speed is always taken as positive. */
   readonly slide?: boolean;
 };
 
@@ -219,6 +220,7 @@ export function humanoid(h: Human): Part[] {
     if (a?.glows?.length)
       parts.push({
         glow: 1,
+        body: true,
         pivot,
         motion,
         boxes: a.glows.map((b) => box([b.at[0] + x, b.at[1] + hand, b.at[2]], b.size, b.color)),
@@ -358,7 +360,7 @@ export function buildCast(arts: readonly MemberArt[]): {
         const speed = m?.speed ?? 0;
         const motion = [
           m?.slide ? (m.amp ?? 0) * FV : (m?.amp ?? 0),
-          m?.slide ? -Math.max(speed, 1e-3) : speed,
+          m?.slide ? -Math.max(Math.abs(speed), 1e-3) : Math.abs(speed),
           m?.phase ?? 0,
           m?.slide ? (m.rest ?? 0) * FV : (m?.rest ?? 0),
         ];

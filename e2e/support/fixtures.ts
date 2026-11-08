@@ -5,7 +5,51 @@ import { test as base, expect } from '@playwright/test';
 // failure) call `consoleErrors.allow(pattern)` first.
 type ConsoleErrors = { list: string[]; allow: (pattern: RegExp) => void };
 
-export const test = base.extend<{ consoleErrors: ConsoleErrors }>({
+const SHA = 'e2e0000000000000000000000000000000000000';
+const CORS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-headers': 'If-None-Match, Accept',
+  'access-control-expose-headers': 'ETag, X-RateLimit-Remaining, X-RateLimit-Reset',
+};
+
+export const test = base.extend<{ consoleErrors: ConsoleErrors; liveFeed: undefined }>({
+  // The scene polls the live feed (GitHub) as soon as it mounts. Answer it
+  // locally with an all-idle feed so no test depends on the network; specs
+  // that need other answers add their own page.route, which takes precedence.
+  liveFeed: [
+    async ({ page }, use) => {
+      await page.route('https://api.github.com/**', (route) =>
+        route.request().method() === 'OPTIONS'
+          ? route.fulfill({ status: 204, headers: CORS })
+          : route.fulfill({
+              status: 200,
+              headers: {
+                ...CORS,
+                ETag: `"${SHA}"`,
+                'X-RateLimit-Remaining': '59',
+                'X-RateLimit-Reset': String(Math.floor(Date.now() / 1000) + 3600),
+              },
+              body: SHA,
+            }),
+      );
+      await page.route('https://raw.githubusercontent.com/**', (route) =>
+        route.fulfill({
+          status: 200,
+          headers: CORS,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            version: 1,
+            updatedAt: new Date().toISOString(),
+            missions: [],
+            members: {},
+            events: [],
+          }),
+        }),
+      );
+      await use(undefined);
+    },
+    { auto: true },
+  ],
   consoleErrors: [
     async ({ page }, use) => {
       const list: string[] = [];
