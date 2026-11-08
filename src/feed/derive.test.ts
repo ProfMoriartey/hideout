@@ -1,0 +1,301 @@
+import { describe, expect, it } from 'vitest';
+import {
+  CELEBRATE_MS,
+  STALE_AFTER_MS,
+  derive,
+  displayState,
+  eventText,
+  formatDuration,
+  trackCelebrations,
+} from './derive';
+import type { FeedEvent, MemberStatus, StatusFeed } from './types';
+
+const NOW = Date.parse('2026-11-08T12:00:00Z');
+const iso = (msAgo: number) => new Date(NOW - msAgo).toISOString();
+const H = 3_600_000;
+
+function feed(partial: Partial<StatusFeed> = {}): StatusFeed {
+  return { version: 1, updatedAt: iso(0), missions: [], members: {}, events: [], ...partial };
+}
+
+describe('displayState', () => {
+  it('missing member is idle', () => {
+    expect(displayState(undefined, NOW)).toBe('idle');
+  });
+
+  it('idle stays idle and recent working is working', () => {
+    expect(displayState({ state: 'idle', since: iso(10 * H) }, NOW)).toBe('idle');
+    expect(displayState({ state: 'working', since: iso(60_000) }, NOW)).toBe('working');
+  });
+
+  it('working turns stale strictly after 3 h', () => {
+    expect(STALE_AFTER_MS).toBe(3 * H);
+    expect(displayState({ state: 'working', since: iso(3 * H) }, NOW)).toBe('working');
+    expect(displayState({ state: 'working', since: iso(3 * H + 1) }, NOW)).toBe('stale');
+  });
+
+  it('stale uses updatedAt when present, falling back to since', () => {
+    const fresh: MemberStatus = {
+      state: 'working',
+      since: iso(4 * H),
+      updatedAt: iso(10 * 60_000),
+    };
+    expect(displayState(fresh, NOW)).toBe('working');
+    expect(displayState({ ...fresh, updatedAt: iso(3 * H + 1) }, NOW)).toBe('stale');
+    expect(displayState({ ...fresh, updatedAt: iso(3 * H) }, NOW)).toBe('working');
+  });
+
+  it('running time still counts from since when updatedAt is newer', () => {
+    const d = derive(
+      feed({
+        members: { feitan: { state: 'working', since: iso(4 * H), updatedAt: iso(60_000) } },
+      }),
+      {},
+      NOW,
+    );
+    expect(d.members.feitan).toMatchObject({ display: 'working', runningFor: '4 h 0 min' });
+  });
+
+  it('done celebrates while since is under 8 s old, then idles', () => {
+    const done = (ago: number): MemberStatus => ({ state: 'done', since: iso(ago) });
+    expect(displayState(done(0), NOW)).toBe('done');
+    expect(displayState(done(7_999), NOW)).toBe('done');
+    expect(displayState(done(8_000), NOW)).toBe('idle');
+    expect(displayState(done(H), NOW)).toBe('idle');
+  });
+
+  it('a done with a future since (slow client clock) does not celebrate', () => {
+    expect(displayState({ state: 'done', since: iso(-60_000) }, NOW)).toBe('idle');
+  });
+
+  it('an old done celebrates while a live celebration window is open', () => {
+    const old: MemberStatus = { state: 'done', since: iso(H) };
+    expect(displayState(old, NOW, NOW + 1)).toBe('done');
+    expect(displayState(old, NOW, NOW)).toBe('idle');
+  });
+});
+
+describe('trackCelebrations', () => {
+  it('opens a ~3 s window when a working -> done change is seen live', () => {
+    expect(CELEBRATE_MS).toBe(3000);
+    const before = feed({ members: { feitan: { state: 'working', since: iso(H) } } });
+    const after = feed({ members: { feitan: { state: 'done', since: iso(10_000) } } });
+    const c = trackCelebrations(before, after, NOW, {});
+    expect(c).toEqual({ feitan: NOW + 3000 });
+    const d = derive(after, c, NOW + 2999);
+    expect(d.members.feitan.display).toBe('done');
+    expect(derive(after, c, NOW + 3000).members.feitan.display).toBe('idle');
+  });
+
+  it('does not celebrate a working -> done that happened long before it was seen', () => {
+    const before = feed({ members: { feitan: { state: 'working', since: iso(3 * H) } } });
+    const after = feed({ members: { feitan: { state: 'done', since: iso(H / 2) } } });
+    expect(trackCelebrations(before, after, NOW, {})).toEqual({});
+  });
+
+  it('does not celebrate a working -> done with a future since', () => {
+    const before = feed({ members: { feitan: { state: 'working', since: iso(H) } } });
+    const after = feed({ members: { feitan: { state: 'done', since: iso(-H) } } });
+    expect(trackCelebrations(before, after, NOW, {})).toEqual({});
+  });
+
+  it('does not celebrate on first load or for done -> done', () => {
+    const done = feed({ members: { feitan: { state: 'done', since: iso(H) } } });
+    expect(trackCelebrations(null, done, NOW, {})).toEqual({});
+    expect(trackCelebrations(done, done, NOW, {})).toEqual({});
+  });
+
+  it('drops expired windows', () => {
+    const f = feed();
+    expect(trackCelebrations(f, f, NOW, { machi: NOW - 1, feitan: NOW + 5 })).toEqual({
+      feitan: NOW + 5,
+    });
+  });
+});
+
+describe('clock skew and live-celebration gating', () => {
+  const working = feed({ members: { feitan: { state: 'working', since: iso(H) } } });
+  const doneAt = (since: string) => feed({ members: { feitan: { state: 'done', since } } });
+
+  it('does not celebrate a working -> done whose since is in the future', () => {
+    const future = doneAt(new Date(NOW + 5000).toISOString());
+    expect(trackCelebrations(working, future, NOW, {})).toEqual({});
+  });
+
+  it('celebrates a live change up to 60 s old and not a millisecond older', () => {
+    expect(trackCelebrations(working, doneAt(iso(59_999)), NOW, {})).toEqual({
+      feitan: NOW + CELEBRATE_MS,
+    });
+    expect(trackCelebrations(working, doneAt(iso(60_000)), NOW, {})).toEqual({});
+  });
+
+  it('a working member whose updatedAt is ahead of the clock is not stale', () => {
+    const ahead = new Date(NOW + 10 * H).toISOString();
+    expect(displayState({ state: 'working', since: iso(10 * H), updatedAt: ahead }, NOW)).toBe(
+      'working',
+    );
+  });
+
+  it('keeps an open celebration through a later feed that does not change that member', () => {
+    const c = trackCelebrations(working, doneAt(iso(1000)), NOW, {});
+    const again = trackCelebrations(doneAt(iso(1000)), doneAt(iso(1000)), NOW + 1000, c);
+    expect(again).toEqual(c);
+  });
+
+  it('an end before the start never yields a negative mission duration', () => {
+    const f = feed({
+      missions: [{ codename: 'Silk', state: 'done', startedAt: iso(0), endedAt: iso(H) }],
+    });
+    expect(derive(f, {}, NOW).missions[0]?.runningForMs).toBe(0);
+  });
+});
+
+describe('derive', () => {
+  it('fills every member, with running time for working members', () => {
+    const d = derive(
+      feed({
+        members: {
+          feitan: {
+            state: 'working',
+            since: iso(42 * 60_000),
+            verb: 'interrogating',
+            mission: 'Silk Lantern',
+            progress: { done: 3, total: 7 },
+          },
+        },
+      }),
+      {},
+      NOW,
+    );
+    expect(Object.keys(d.members)).toHaveLength(13);
+    expect(d.members.machi.display).toBe('idle');
+    expect(d.members.feitan).toMatchObject({
+      id: 'feitan',
+      name: 'Feitan',
+      display: 'working',
+      verb: 'interrogating',
+      mission: 'Silk Lantern',
+      progress: { done: 3, total: 7 },
+      runningForMs: 42 * 60_000,
+      runningFor: '42 min',
+    });
+    expect(d.members.machi.runningForMs).toBeNull();
+    expect(d.workingCount).toBe(1);
+  });
+
+  it('builds the mission banner from the first active mission', () => {
+    const d = derive(
+      feed({
+        missions: [
+          { codename: 'Night Market', state: 'done', startedAt: iso(9 * H), endedAt: iso(8 * H) },
+          {
+            codename: 'Silk Lantern',
+            state: 'active',
+            startedAt: iso(2 * H),
+            tickets: { done: 3, total: 10 },
+          },
+        ],
+      }),
+      {},
+      NOW,
+    );
+    expect(d.banner).toMatchObject({
+      codename: 'Silk Lantern',
+      label: 'Operation Silk Lantern - 3/10',
+      tickets: { done: 3, total: 10 },
+      runningFor: '2 h 0 min',
+    });
+    expect(d.missions.map((m) => m.codename)).toEqual(['Silk Lantern', 'Night Market']);
+    expect(derive(feed(), {}, NOW).banner).toBeNull();
+  });
+
+  it('keeps the last 10 events as ticker lines, newest first', () => {
+    const events = Array.from({ length: 14 }, (_, i) => ({
+      at: iso(i * 60_000),
+      who: 'feitan' as const,
+      kind: 'done' as const,
+      verb: 'interrogating',
+    }));
+    const d = derive(feed({ events }), {}, NOW);
+    expect(d.ticker).toHaveLength(10);
+    expect(d.ticker[0]).toMatchObject({ text: 'Feitan finished interrogating', ago: 'just now' });
+    expect(d.ticker[9]?.ago).toBe('9 min ago');
+  });
+
+  it('works without a feed', () => {
+    const d = derive(null, {}, NOW);
+    expect(d.members.chrollo.display).toBe('idle');
+    expect(d.ticker).toEqual([]);
+    expect(d.banner).toBeNull();
+  });
+});
+
+describe('eventText', () => {
+  it('builds text from kind, verb and display name only', () => {
+    expect(eventText({ at: iso(0), who: 'feitan', kind: 'start', verb: 'interrogating' })).toBe(
+      'Feitan started interrogating',
+    );
+    expect(eventText({ at: iso(0), who: 'feitan', kind: 'done', verb: 'interrogating' })).toBe(
+      'Feitan finished interrogating',
+    );
+    expect(eventText({ at: iso(0), who: 'machi', kind: 'progress', verb: 'stitching' })).toBe(
+      'Machi is still stitching',
+    );
+    expect(eventText({ at: iso(0), who: 'machi', kind: 'done' })).toBe('Machi finished');
+    expect(eventText({ at: iso(0), who: 'machi', kind: 'start' })).toBe('Machi started work');
+    expect(
+      eventText({ at: iso(0), who: 'shalnark', kind: 'mission-start', mission: 'Silk Lantern' }),
+    ).toBe('Operation Silk Lantern started');
+    expect(
+      eventText({ at: iso(0), who: 'shalnark', kind: 'mission-progress', mission: 'Silk Lantern' }),
+    ).toBe('Operation Silk Lantern moved forward');
+    expect(
+      eventText({ at: iso(0), who: 'shalnark', kind: 'mission-done', mission: 'Silk Lantern' }),
+    ).toBe('Operation Silk Lantern complete');
+    expect(eventText({ at: iso(0), who: 'shalnark', kind: 'mission-done' })).toBe(
+      'Operation complete',
+    );
+  });
+
+  it('uses the injected display name', () => {
+    expect(eventText({ at: iso(0), who: 'elders', kind: 'start' }, () => 'The Elders')).toBe(
+      'The Elders started work',
+    );
+  });
+});
+
+describe('formatDuration', () => {
+  it('formats seconds, minutes and hours', () => {
+    expect(formatDuration(12_400)).toBe('12 s');
+    expect(formatDuration(42 * 60_000 + 59_000)).toBe('42 min');
+    expect(formatDuration(3 * H + 5 * 60_000)).toBe('3 h 5 min');
+    expect(formatDuration(-5)).toBe('0 s');
+  });
+});
+
+describe('ticker order and long durations', () => {
+  it('sorts events newest first whatever order the feed has', () => {
+    const e = (at: number, verb: string): FeedEvent => ({
+      at: iso(at),
+      who: 'phinks',
+      kind: 'start',
+      verb,
+    });
+    const d = derive(
+      feed({ events: [e(3000, 'forging'), e(1000, 'wiring'), e(2000, 'fixing')] }),
+      {},
+      NOW,
+    );
+    expect(d.ticker.map((t) => t.text)).toEqual([
+      'Phinks started wiring',
+      'Phinks started fixing',
+      'Phinks started forging',
+    ]);
+  });
+
+  it('shows days past 24 h', () => {
+    expect(formatDuration(26 * H)).toBe('1 d 2 h');
+    expect(formatDuration(50 * H)).toBe('2 d 2 h');
+    expect(formatDuration(23 * H + 59 * 60_000)).toBe('23 h 59 min');
+  });
+});
