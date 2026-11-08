@@ -73,23 +73,23 @@ const chimes = (page: Page) =>
     return (window.__audio?.starts ?? []).map(round).filter((f) => hz.includes(f));
   }, CHIME_HZ);
 
-const toggleOf = (page: Page) => page.getByRole('button', { name: /^Sound (on|off)$/ });
+const toggleOf = (page: Page) => page.getByRole('button', { name: 'Sound', exact: true });
 const stored = (page: Page) => page.evaluate((k) => localStorage.getItem(k), STORAGE_KEY);
 
 /**
  * Loads the demo with the clock running until the scene is ready (the boot
  * overlay covers the page until then), then pauses it inside a demo step, so
  * steps only advance when the test says so. `step` is the step it is paused in.
- * `slow` makes performance.now run at a quarter speed (see the rate limit test).
+ * `slow` divides performance.now by that factor (see the rate limit tests).
  */
 let step = 0;
-async function bootDemo(page: Page, slow = false) {
+async function bootDemo(page: Page, slow = 1) {
   await page.clock.install({ time: ORIGIN });
-  if (slow) {
-    await page.addInitScript(() => {
+  if (slow > 1) {
+    await page.addInitScript((factor) => {
       const now = performance.now.bind(performance);
-      performance.now = () => now() / 4;
-    });
+      performance.now = () => now() / factor;
+    }, slow);
   }
   await page.goto(`./?${DEMO}`);
   await expect(page.locator('html')).toHaveAttribute('data-scene', 'ready');
@@ -150,7 +150,7 @@ test.describe('off by default', () => {
     await page.waitForLoadState('networkidle');
     const toggle = toggleOf(page);
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-    await expect(toggle).toHaveAccessibleName('Sound off');
+    await expect(toggle).toHaveAccessibleName('Sound');
     expect(await contextCount(page)).toBe(0);
     expect(await oscillatorCount(page)).toBe(0);
     expect(requests.filter((u) => /engine-[\w-]+\.js/.test(u))).toEqual([]);
@@ -181,8 +181,8 @@ test.describe('toggle', () => {
     const toggle = toggleOf(page);
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-    await expect(toggle).toHaveAccessibleName('Sound on');
-    await expect(page.getByRole('button', { name: 'Sound off' })).toHaveCount(0);
+    await expect(toggle).toHaveAccessibleName('Sound');
+    await expect(page.getByRole('button', { name: /^Sound (on|off)$/ })).toHaveCount(0);
     expect(await stored(page)).toBe('on');
     // The ambient loop: four drone oscillators and one slow LFO, and no chime yet.
     await expect.poll(() => oscillatorCount(page)).toBe(5);
@@ -191,7 +191,7 @@ test.describe('toggle', () => {
 
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-    await expect(toggle).toHaveAccessibleName('Sound off');
+    await expect(toggle).toHaveAccessibleName('Sound');
     expect(await stored(page)).toBe('off');
     await expectSuspended(page, 'context still running after mute');
     expect(await contextStates(page)).toEqual(['suspended']);
@@ -275,7 +275,7 @@ test.describe('remembered choice', () => {
     await page.reload();
     await expect(toggleOf(page)).toBeVisible();
     await expect(toggleOf(page)).toHaveAttribute('aria-pressed', 'true');
-    await expect(toggleOf(page)).toHaveAccessibleName('Sound on');
+    await expect(toggleOf(page)).toHaveAccessibleName('Sound');
     await page.waitForLoadState('networkidle');
     // Autoplay policy: nothing audio-related before a gesture.
     expect(await contextCount(page)).toBe(0);
@@ -401,31 +401,90 @@ test.describe('cues', () => {
     expect(await chimes(page)).toEqual(NOTES[cue ?? 'start']);
   });
 
-  test('cues are rate limited: updates closer than the gap do not stack', async ({ page }) => {
-    // Page time runs at a quarter speed for the engine's clock, so the 4 s demo
-    // steps look 1 s apart to the rate limiter (limit 1.5 s).
+  test('a done cue is never held back by the rate limit', async ({ page }) => {
+    // The engine's clock runs at a quarter speed, so the 4 s demo steps look 1 s
+    // apart to the rate limiter (gap 1.5 s). Every demo step has a done, which
+    // bypasses the gap, so every step still chimes.
     await page.addInitScript(installAudioSpy);
-    await bootDemo(page, true);
+    await bootDemo(page, 4);
+    await toggleOf(page).click();
+    await expect.poll(() => oscillatorCount(page)).toBe(5);
+    expect(DEMO_STEP_MS / 4).toBeLessThan(CUE_GAP_MS);
+    const expected: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      await advanceTo(page, step + 1);
+      const cue = cueBetween(step - 1, step);
+      expect(cue).toBe('done');
+      expected.push(...NOTES.done);
+      await expect.poll(() => chimes(page)).toEqual(expected);
+    }
+  });
+
+  test('start cues are rate limited, done cues are not', async ({ page }) => {
+    // Live feed polled every 30 s; the engine's clock runs 100x slower, so a poll
+    // looks 0.3 s after the previous one (gap 1.5 s).
+    const events: object[] = [];
+    let sha = 0;
+    let rawHits = 0;
+    await page.route('**/api.github.com/**', (r) =>
+      r.fulfill({ status: 200, headers: CORS, body: String(sha).padStart(40, 'a') }),
+    );
+    await page.route('**/raw.githubusercontent.com/**', (r) => {
+      rawHits++;
+      return r.fulfill({
+        status: 200,
+        headers: CORS,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          version: 1,
+          updatedAt: new Date(ORIGIN + sha * 1000).toISOString(),
+          missions: [],
+          members: {},
+          events,
+        }),
+      });
+    });
+    await page.addInitScript(installAudioSpy);
+    await page.clock.install({ time: ORIGIN });
+    await page.addInitScript(() => {
+      const now = performance.now.bind(performance);
+      performance.now = () => now() / 100;
+    });
+    await page.goto('./');
+    await expect(page.locator('html')).toHaveAttribute('data-scene', 'ready');
+    await expect(page.getByText('Updated')).toBeVisible();
     await toggleOf(page).click();
     await expect.poll(() => oscillatorCount(page)).toBe(5);
 
-    const stepGapMs = DEMO_STEP_MS / 4;
-    expect(stepGapMs).toBeLessThan(CUE_GAP_MS);
-    const expected: number[] = [];
-    let last = -Infinity;
-    let suppressed = 0;
-    for (let i = 1; i <= 14; i++) {
-      await advanceTo(page, step + 1);
-      const cue = cueBetween(step - 1, step);
-      if (!cue) continue;
-      if (i * stepGapMs - last >= CUE_GAP_MS) {
-        last = i * stepGapMs;
-        expected.push(...NOTES[cue]);
-      } else suppressed++;
-      await expect.poll(() => chimes(page)).toEqual(expected);
-    }
-    expect(suppressed, 'the scenario contains a suppressed cue').toBeGreaterThan(0);
-    expect(expected.length).toBeGreaterThan(0);
+    let n = 0;
+    /** One poll cycle, optionally with a new event. */
+    const poll = async (who: 'machi' | 'kortopi' | 'feitan' | null, kind: 'start' | 'done') => {
+      n++;
+      sha = n;
+      if (who) events.unshift({ at: new Date(ORIGIN + n * 1000).toISOString(), who, kind });
+      const before = rawHits;
+      await page.clock.fastForward(35_000);
+      await expect.poll(() => rawHits).toBeGreaterThan(before);
+      await page.waitForTimeout(150);
+    };
+    await poll('machi', 'start');
+    expect(await chimes(page), 'first start chimes').toEqual(NOTES.start);
+    await poll('kortopi', 'start');
+    expect(await chimes(page), 'start within the gap is dropped').toEqual(NOTES.start);
+    await poll('feitan', 'done');
+    expect(await chimes(page), 'done within the gap still plays').toEqual([
+      ...NOTES.start,
+      ...NOTES.done,
+    ]);
+    await poll('machi', 'start');
+    expect(await chimes(page), 'start right after a done is dropped').toHaveLength(3);
+    for (let i = 0; i < 6; i++) await poll(null, 'start');
+    await poll('kortopi', 'start');
+    expect(await chimes(page), 'start after the gap plays again').toEqual([
+      ...NOTES.start,
+      ...NOTES.done,
+      ...NOTES.start,
+    ]);
   });
 
   test('no cues while sound is off, and none for what happened meanwhile when it comes back', async ({
