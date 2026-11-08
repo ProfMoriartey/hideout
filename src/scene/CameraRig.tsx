@@ -1,11 +1,11 @@
 // Isometric orthographic camera with clamped rotate, zoom and pan.
 // Mouse: left drag pans, right drag rotates, wheel zooms.
-// Touch: one finger pans, two fingers pinch-zoom and rotate.
+// Touch: one finger pans, two fingers pinch-zoom and pan (rotation is mouse-only).
 
 import { MapControls, OrthographicCamera } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
-import { Vector3, type OrthographicCamera as OrthoCam } from 'three';
+import { TOUCH, Vector3, type OrthographicCamera as OrthoCam } from 'three';
 import type { MapControls as MapControlsImpl } from 'three-stdlib';
 import type { MemberId } from '../config/members';
 import type { Vec3 } from './voxel/grid';
@@ -87,6 +87,11 @@ export function CameraRig() {
   useLayoutEffect(() => {
     home.current.zoom = fit;
     if (!touched.current) place(home.current.target, fit);
+    else if (camera.current) {
+      // Zoom limits follow the viewport; keep a user's zoom inside them after a rotate/resize.
+      camera.current.zoom = Math.min(Math.max(camera.current.zoom, fit * 0.75), fit * 7);
+      camera.current.updateProjectionMatrix();
+    }
   }, [fit, place, activeCamera, activeControls]);
 
   useEffect(() => {
@@ -176,6 +181,7 @@ export function CameraRig() {
         minZoom={fit * 0.75}
         maxZoom={fit * 7}
         zoomToCursor
+        touches={{ ONE: TOUCH.PAN, TWO: TOUCH.DOLLY_PAN }}
         minAzimuthAngle={DEFAULT_AZIMUTH - AZIMUTH_RANGE}
         maxAzimuthAngle={DEFAULT_AZIMUTH + AZIMUTH_RANGE}
         minPolarAngle={POLAR_MIN}
