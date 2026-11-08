@@ -38,6 +38,8 @@ const DIRS = [
 ] as const;
 
 const AO_LEVELS = [0.5, 0.68, 0.84, 1] as const;
+/** The current face's four corner AO levels (reused; meshing is synchronous). */
+const ao = new Uint8Array(4);
 const DEFAULT_AMBIENT: Vec3 = [0.3, 0.32, 0.45];
 
 function srgbToLinear(c: number): number {
@@ -88,7 +90,7 @@ export function buildVoxelGeometry(
       n[a] = dir.sign;
 
       const base = positions.length / 3;
-      const ao: number[] = [];
+      let k4 = 0;
       // Corner order is counter-clockwise seen from outside the face.
       const order = dir.sign > 0 ? CORNERS_POS : CORNERS_NEG;
       for (const [cu, cv] of order) {
@@ -110,7 +112,7 @@ export function buildVoxelGeometry(
         const s2 = occ(grid, fx, fy, fz, u, 0, v, sv);
         const c = occ(grid, fx, fy, fz, u, su, v, sv);
         const level = s1 && s2 ? 0 : 3 - (s1 + s2 + c);
-        ao.push(level);
+        ao[k4++] = level;
         const occl = AO_LEVELS[level] ?? 1;
 
         if (glow) {
@@ -125,8 +127,9 @@ export function buildVoxelGeometry(
           const dx = light.position[0] - cx;
           const dy = light.position[1] - cy;
           const dz = light.position[2] - cz;
-          const dist = Math.hypot(dx, dy, dz);
-          if (dist >= light.radius) continue;
+          const d2 = dx * dx + dy * dy + dz * dz;
+          if (d2 >= light.radius * light.radius) continue;
+          const dist = Math.sqrt(d2);
           const fall = 1 - dist / light.radius;
           // Half-wrapped lambert so faces turned slightly away still catch some light.
           const ndl =
@@ -191,8 +194,9 @@ function occ(
   v: number,
   dv: number,
 ): number {
-  const q = [x, y, z];
-  q[u] = (q[u] ?? 0) + du;
-  q[v] = (q[v] ?? 0) + dv;
-  return grid.has(q[0] ?? 0, q[1] ?? 0, q[2] ?? 0) ? 1 : 0;
+  // No scratch array: this runs 12 times per face.
+  const ox = (u === 0 ? du : 0) + (v === 0 ? dv : 0);
+  const oy = (u === 1 ? du : 0) + (v === 1 ? dv : 0);
+  const oz = (u === 2 ? du : 0) + (v === 2 ? dv : 0);
+  return grid.has(x + ox, y + oy, z + oz) ? 1 : 0;
 }
