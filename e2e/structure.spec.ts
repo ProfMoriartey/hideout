@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, HIDE_OVERLAYS, test } from './support/fixtures';
 
 // Budget from docs/ARCHITECTURE.md: under ~60 draw calls for the whole scene.
 const DRAW_CALL_BUDGET = 60;
@@ -37,7 +37,7 @@ test('hideout structure renders within the draw-call budget', async ({ page }, t
 test('the scene is not blank: lit pixels across the default view', async ({ page }) => {
   await page.goto('./');
   await page.waitForFunction(() => (window.__hideoutStats?.frames ?? 0) > 3);
-  const png = await page.locator('canvas').screenshot();
+  const png = await page.locator('canvas').screenshot({ style: HIDE_OVERLAYS });
   // Count distinct coarse colours in the screenshot by decoding it in the page.
   const distinct = await page.evaluate(async (b64) => {
     const img = new Image();

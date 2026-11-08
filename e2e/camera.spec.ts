@@ -1,5 +1,5 @@
 import type { CDPSession, Page } from '@playwright/test';
-import { expect, sceneReady, test } from './support/fixtures';
+import { expect, HIDE_OVERLAYS, sceneReady, test } from './support/fixtures';
 
 // Ticket 3: default view, camera limits and gestures. The camera is not
 // exposed to the page, so every check looks at the rendered canvas.
@@ -15,7 +15,9 @@ async function settle(page: Page): Promise<{ png: string; lit: Lit }> {
   await expect
     .poll(
       async () => {
-        const cur = (await page.locator('canvas').screenshot()).toString('base64');
+        const cur = (await page.locator('canvas').screenshot({ style: HIDE_OVERLAYS })).toString(
+          'base64',
+        );
         const same = cur === prev;
         prev = cur;
         return same;
