@@ -1,10 +1,11 @@
 import { Canvas } from '@react-three/fiber';
+import { useState } from 'react';
 import { hideBootScreen } from './boot';
 import { OverlayBoundary, SceneBoundary } from './boundaries';
 import { MEMBER_BY_ID } from './config/members';
 import { getFeedStore } from './feed/store';
 import { PerfMonitor } from './perf/PerfMonitor';
-import { DPR_MAX, deviceTier } from './perf/quality';
+import { DPR_MAX, deviceTier, useReducedMotion } from './perf/quality';
 import { CameraRig } from './scene/CameraRig';
 import { Hideout } from './scene/Hideout';
 import { Labels } from './scene/Labels';
@@ -23,13 +24,18 @@ import { Ticker } from './ui/Ticker';
 getFeedStore().setNameOf((id) => MEMBER_BY_ID[id].name);
 
 export default function App() {
+  // Changes at most twice (tier drops); reduced motion is the user's setting.
+  const [tier, setTier] = useState(deviceTier);
+  const reduced = useReducedMotion();
   return (
     <>
       <SceneBoundary>
         <Canvas
           style={{ position: 'fixed', inset: 0 }}
-          // Starting tier's cap (1.5 on touch devices, 2 elsewhere); PerfMonitor lowers it on low fps.
-          dpr={[1, DPR_MAX[deviceTier()]]}
+          // Tier cap: 1.5 on touch devices, 2 elsewhere, lower after PerfMonitor drops a tier.
+          dpr={[1, DPR_MAX[tier]]}
+          // Nothing animates under reduced motion; low tier is driven at LOW_FPS by PerfMonitor.
+          frameloop={reduced || tier === 'low' ? 'demand' : 'always'}
           gl={{ antialias: false, powerPreference: 'high-performance' }}
           camera={{ position: [3, 3, 3], fov: 45 }}
           onCreated={() => requestAnimationFrame(() => hideBootScreen())}
@@ -47,7 +53,7 @@ export default function App() {
           {/* [slot 5 Labels] <Labels /> */}
           <Labels />
           {/* [slot 8 Performance] <PerfMonitor /> */}
-          <PerfMonitor />
+          <PerfMonitor tier={tier} reduced={reduced} onDrop={setTier} />
         </Canvas>
       </SceneBoundary>
 

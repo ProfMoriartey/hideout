@@ -20,8 +20,16 @@ describe('quality tiers', () => {
     expect(m.tier).toBe('high');
   });
 
+  it('ignores the first second (startup hitches)', () => {
+    const m = createMonitor('high');
+    expect(stepMonitor(m, 0.9)).toBe(false);
+    expect(run(m, 60, 3.2)).toBe(0);
+    expect(m.tier).toBe('high');
+  });
+
   it('drops one tier per 3 s window under 45 fps, down to low and no further', () => {
     const m = createMonitor('high');
+    run(m, 30, 1);
     expect(run(m, 30, 2.9)).toBe(0);
     expect(run(m, 30, 0.2)).toBe(1);
     expect(m.tier).toBe('medium');
@@ -32,7 +40,7 @@ describe('quality tiers', () => {
 
   it('never climbs back up, however fast the frames get', () => {
     const m = createMonitor('medium');
-    run(m, 20, 3.1);
+    run(m, 20, 4.1);
     run(m, 120, 60);
     expect(m.tier).toBe('low');
   });

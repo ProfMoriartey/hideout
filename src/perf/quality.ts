@@ -1,6 +1,8 @@
 // Quality tiers and the fps monitor that steps them down. Pure, so the
 // switching rules are unit-tested; PerfMonitor feeds it one frame at a time.
 
+import { useSyncExternalStore } from 'react';
+
 export type Tier = 'low' | 'medium' | 'high';
 
 /** Highest device pixel ratio each tier renders at (never above the screen's own). */
@@ -12,10 +14,25 @@ export const DROP_FPS = 45;
 export const WINDOW_SECONDS = 3;
 /** A frame gap this long (hidden tab, frozen page) restarts the window instead of counting. */
 const GAP_SECONDS = 1;
+/** First seconds not measured: shader compile and GPU upload hitches are not the device's pace. */
+const WARMUP_SECONDS = 1;
 
 /** Touch-first devices (phones, tablets) start at medium, the rest at high. */
 export function startTier(coarsePointer: boolean): Tier {
   return coarsePointer ? 'medium' : 'high';
+}
+
+const motionQuery =
+  typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+const subscribeMotion = (cb: () => void) => {
+  motionQuery?.addEventListener('change', cb);
+  return () => motionQuery?.removeEventListener('change', cb);
+};
+const getMotion = () => motionQuery?.matches ?? false;
+
+/** Live `prefers-reduced-motion`. */
+export function useReducedMotion(): boolean {
+  return useSyncExternalStore(subscribeMotion, getMotion);
 }
 
 export function deviceTier(): Tier {
@@ -25,7 +42,7 @@ export function deviceTier(): Tier {
 export type Monitor = { tier: Tier; time: number; frames: number };
 
 export function createMonitor(tier: Tier): Monitor {
-  return { tier, time: 0, frames: 0 };
+  return { tier, time: -WARMUP_SECONDS, frames: 0 };
 }
 
 /**
@@ -41,6 +58,7 @@ export function stepMonitor(m: Monitor, dt: number): boolean {
     return false;
   }
   m.time += dt;
+  if (m.time <= 0) return false;
   m.frames++;
   if (m.time < WINDOW_SECONDS) return false;
   const slow = m.frames / m.time < DROP_FPS;

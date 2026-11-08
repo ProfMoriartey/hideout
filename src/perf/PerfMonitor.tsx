@@ -1,42 +1,29 @@
-// Applies the quality tier (DPR, frame cap), steps it down on low fps, renders
-// on demand when nothing moves (reduced motion), and handles WebGL context loss.
+// Runs the fps monitor, caps low tier at LOW_FPS, and handles WebGL context
+// loss. App owns the tier and passes DPR and frameloop to <Canvas> as props:
+// R3F re-applies Canvas props on every resize, so setting them imperatively
+// here would be undone by the first rotation.
 // Hidden tabs need nothing here: browsers stop requestAnimationFrame for them,
 // and the monitor ignores the gap when the tab comes back.
 
 import { useFrame, useThree } from '@react-three/fiber';
-import { useEffect, useState, useSyncExternalStore } from 'react';
-import { DPR_MAX, LOW_FPS, createMonitor, deviceTier, stepMonitor } from './quality';
+import { useEffect, useState } from 'react';
+import { LOW_FPS, createMonitor, stepMonitor, type Tier } from './quality';
 import './perf.css';
 
-const motionQuery =
-  typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
-const subscribeMotion = (cb: () => void) => {
-  motionQuery?.addEventListener('change', cb);
-  return () => motionQuery?.removeEventListener('change', cb);
-};
-const reducedMotion = () => motionQuery?.matches ?? false;
+type Props = { tier: Tier; reduced: boolean; onDrop: (tier: Tier) => void };
 
-export function PerfMonitor() {
+export function PerfMonitor({ tier, reduced, onDrop }: Props) {
   const gl = useThree((s) => s.gl);
-  const setDpr = useThree((s) => s.setDpr);
-  const setFrameloop = useThree((s) => s.setFrameloop);
   const invalidate = useThree((s) => s.invalidate);
-  const [monitor] = useState(() => createMonitor(deviceTier()));
-  const [tier, setTier] = useState(monitor.tier);
-  const reduced = useSyncExternalStore(subscribeMotion, reducedMotion);
+  const [monitor] = useState(() => createMonitor(tier));
 
   useEffect(() => {
     document.documentElement.dataset.quality = tier;
-    setDpr([1, DPR_MAX[tier]]);
-  }, [tier, setDpr]);
+  }, [tier]);
 
-  // Reduced motion: nothing animates, so draw only when something asks
-  // (controls, camera moves, state changes). Low tier: draw at most LOW_FPS.
+  // Low tier renders on demand; this asks for a frame at most LOW_FPS times a second.
   useEffect(() => {
-    const capped = tier === 'low';
-    setFrameloop(reduced || capped ? 'demand' : 'always');
-    invalidate();
-    if (reduced || !capped) return;
+    if (reduced || tier !== 'low') return;
     let id = 0;
     let last = -Infinity;
     // A few ms of slack so a 60 Hz screen draws every other refresh, not every third.
@@ -49,11 +36,11 @@ export function PerfMonitor() {
     };
     id = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(id);
-  }, [tier, reduced, setFrameloop, invalidate]);
+  }, [tier, reduced, invalidate]);
 
   // Under demand rendering frame times say nothing about the device; only measure at full rate.
   useFrame((_, dt) => {
-    if (!reduced && stepMonitor(monitor, dt)) setTier(monitor.tier);
+    if (!reduced && stepMonitor(monitor, dt)) onDrop(monitor.tier);
   });
 
   // three keeps the context restorable (it calls preventDefault) and re-uploads
@@ -70,7 +57,10 @@ export function PerfMonitor() {
     reload.textContent = 'Reload';
     reload.onclick = () => location.reload();
     note.append(text, reload);
-    const onLost = () => document.body.append(note);
+    const onLost = () => {
+      document.body.append(note);
+      reload.focus();
+    };
     const onRestored = () => {
       note.remove();
       invalidate();

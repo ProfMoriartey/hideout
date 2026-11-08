@@ -72,10 +72,15 @@ async function slowFrames(page: Page, n: number, ms = SLOW_MS) {
   for (let i = 0; i < n; i++) await page.clock.fastForward(ms);
 }
 
-/** Runs the monitor through one slow window and returns the tier it settled on. */
+/**
+ * Feeds slow frames until the tier changes (at most two windows, since the
+ * window already running may be part full) and returns the tier it left.
+ * Stopping at the drop keeps leftover slow frames out of the next window.
+ */
 async function dropOnce(page: Page) {
   const from = await tier(page);
-  await slowFrames(page, WINDOW_FRAMES);
+  for (let i = 0; i < 2 * WINDOW_FRAMES && (await tier(page)) === from; i++)
+    await page.clock.fastForward(SLOW_MS);
   await page.clock.runFor(100);
   return from;
 }
@@ -188,6 +193,20 @@ test.describe('frame loop', () => {
     expect(n).toBeLessThanOrEqual(66); // 30 fps x 2 s, with a frame or two of slack
   });
 
+  test('a resize (rotation, URL bar) keeps the low tier: DPR 1 and the 30 fps cap', async ({
+    page,
+  }) => {
+    // R3F re-applies the Canvas props on every resize; the tier must survive that.
+    await open(page);
+    for (let i = 0; i < 3 && (await tier(page)) !== 'low'; i++) await dropOnce(page);
+    await page.setViewportSize({ width: 320, height: 480 });
+    await page.waitForTimeout(100); // the resize observer and React run in real time
+    await page.clock.runFor(500);
+    expect(await tier(page)).toBe('low');
+    await expect.poll(() => dpr(page)).toBeCloseTo(1, 1);
+    expect(await rendersDuring(page, () => page.clock.runFor(2000))).toBeLessThanOrEqual(66);
+  });
+
   test.describe('reduced motion', () => {
     test.use({ reducedMotion: 'reduce' });
 
@@ -196,6 +215,14 @@ test.describe('frame loop', () => {
       await page.clock.runFor(1000);
       expect(await renders(page)).toBeGreaterThan(0); // it did draw once
       expect(await rendersDuring(page, () => page.clock.runFor(5000))).toBe(0);
+    });
+
+    test('a resize draws the new size, then the scene goes quiet again', async ({ page }) => {
+      await open(page);
+      await page.setViewportSize({ width: 320, height: 480 });
+      await page.waitForTimeout(100);
+      expect(await rendersDuring(page, () => page.clock.runFor(500))).toBeGreaterThan(0);
+      expect(await rendersDuring(page, () => page.clock.runFor(3000))).toBe(0);
     });
 
     test('a camera move (wheel) still renders, then goes quiet again', async ({ page }) => {
