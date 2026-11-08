@@ -27,6 +27,10 @@ import type { MemberId } from './types';
 import { MEMBER_IDS } from './validate';
 
 export const DEFAULT_SEED = 1;
+/** Larger setTimeout delays overflow and fire at once (a far-future timestamp would spin). */
+const MAX_TIMEOUT_MS = 2 ** 31 - 1;
+/** Date's range; a demo origin beyond it cannot be formatted. */
+const MAX_DATE_MS = 8.64e15;
 
 export type FeedStatus = Pick<FeedSnapshot, 'status' | 'source' | 'lastUpdated'>;
 export type StoreState = { snap: FeedSnapshot; celebrations: Celebrations; nameOf: NameOf };
@@ -67,7 +71,7 @@ export function readDemoParams(search: string): {
   return {
     demo: params.get('demo') === '1',
     seed: Number.isFinite(seed) ? seed : DEFAULT_SEED,
-    ...(Number.isFinite(origin) ? { origin } : {}),
+    ...(Math.abs(origin) <= MAX_DATE_MS ? { origin } : {}),
   };
 }
 
@@ -125,15 +129,20 @@ export function createFeedStore(o: StoreOptions = {}): FeedStore {
     }
     const at = nextBoundary(now);
     if (at !== null && listeners.size) {
-      boundary = clock.setTimeout(() => {
-        boundary = null;
-        recompute();
-        listeners.forEach((cb) => cb());
-      }, at - now);
+      boundary = clock.setTimeout(
+        () => {
+          boundary = null;
+          recompute();
+          listeners.forEach((cb) => cb());
+        },
+        Math.min(at - now, MAX_TIMEOUT_MS),
+      );
     }
   }
 
   function onChange(snap: FeedSnapshot) {
+    // A restarted source begins with an empty snapshot: keep the feed we hold.
+    if (snap.status === 'loading' && state.snap.feed) return;
     const celebrations =
       snap.feed && snap.feed !== state.snap.feed
         ? trackCelebrations(state.snap.feed, snap.feed, clock.now(), state.celebrations)

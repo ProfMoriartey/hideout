@@ -125,12 +125,12 @@ function eventsAt(step: number, offs: number[], seed: number, origin: number): F
       const done = mod(k, MISSION_PERIOD) === 30;
       events.push({
         at,
-        who: 'shalnark',
+        who: 'chrollo',
         kind: done ? 'mission-done' : 'mission-progress',
         mission: 'Silk Lantern',
       });
     } else if (mod(k, MISSION_PERIOD) === 0) {
-      events.push({ at, who: 'shalnark', kind: 'mission-start', mission: 'Silk Lantern' });
+      events.push({ at, who: 'chrollo', kind: 'mission-start', mission: 'Silk Lantern' });
     }
     MEMBER_IDS.forEach((who, i) => {
       const { phase, cycle } = phaseAt(k, offs[i] ?? 0);

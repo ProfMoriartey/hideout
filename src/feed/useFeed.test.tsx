@@ -162,6 +162,19 @@ describe('useFeed', () => {
     off();
   });
 
+  it('does not spin on a far-future timestamp (setTimeout overflow)', async () => {
+    const { clock, store } = liveStore();
+    body.members.pakunoda = { state: 'working', since: '2062-01-01T00:00:00Z' };
+    const timers: number[] = [];
+    const set = clock.setTimeout;
+    clock.setTimeout = (fn, ms) => (timers.push(ms), set(fn, ms));
+    const off = store.subscribe(() => {});
+    await flush();
+    delete body.members.pakunoda;
+    expect(Math.max(...timers)).toBeLessThanOrEqual(2 ** 31 - 1);
+    off();
+  });
+
   it('takes names from the nameOf seam', async () => {
     const { store } = liveStore({ nameOf: (id) => `<${id}>` });
     const off = store.subscribe(() => {});

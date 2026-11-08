@@ -54,6 +54,14 @@ describe('demo feed', () => {
     expect(new Set(f.events.map((e) => e.kind)).size).toBeGreaterThanOrEqual(3);
   });
 
+  it('writes mission events as chrollo, like the real feed', () => {
+    const missionEvents = Array.from({ length: 40 }, (_, k) => demoFeedAt(k, 1, ORIGIN))
+      .flatMap((f) => f.events)
+      .filter((e) => e.kind.startsWith('mission-'));
+    expect(missionEvents.length).toBeGreaterThan(0);
+    expect(missionEvents.every((e) => e.who === 'chrollo')).toBe(true);
+  });
+
   it('maps time to steps', () => {
     expect(demoStep(ORIGIN, ORIGIN)).toBe(0);
     expect(demoStep(ORIGIN + DEMO_STEP_MS - 1, ORIGIN)).toBe(0);

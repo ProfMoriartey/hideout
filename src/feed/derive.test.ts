@@ -93,6 +93,12 @@ describe('trackCelebrations', () => {
     expect(trackCelebrations(before, after, NOW, {})).toEqual({});
   });
 
+  it('does not celebrate a working -> done with a future since', () => {
+    const before = feed({ members: { feitan: { state: 'working', since: iso(H) } } });
+    const after = feed({ members: { feitan: { state: 'done', since: iso(-H) } } });
+    expect(trackCelebrations(before, after, NOW, {})).toEqual({});
+  });
+
   it('does not celebrate on first load or for done -> done', () => {
     const done = feed({ members: { feitan: { state: 'done', since: iso(H) } } });
     expect(trackCelebrations(null, done, NOW, {})).toEqual({});
@@ -104,6 +110,43 @@ describe('trackCelebrations', () => {
     expect(trackCelebrations(f, f, NOW, { machi: NOW - 1, feitan: NOW + 5 })).toEqual({
       feitan: NOW + 5,
     });
+  });
+});
+
+describe('clock skew and live-celebration gating', () => {
+  const working = feed({ members: { feitan: { state: 'working', since: iso(H) } } });
+  const doneAt = (since: string) => feed({ members: { feitan: { state: 'done', since } } });
+
+  it('does not celebrate a working -> done whose since is in the future', () => {
+    const future = doneAt(new Date(NOW + 5000).toISOString());
+    expect(trackCelebrations(working, future, NOW, {})).toEqual({});
+  });
+
+  it('celebrates a live change up to 60 s old and not a millisecond older', () => {
+    expect(trackCelebrations(working, doneAt(iso(59_999)), NOW, {})).toEqual({
+      feitan: NOW + CELEBRATE_MS,
+    });
+    expect(trackCelebrations(working, doneAt(iso(60_000)), NOW, {})).toEqual({});
+  });
+
+  it('a working member whose updatedAt is ahead of the clock is not stale', () => {
+    const ahead = new Date(NOW + 10 * H).toISOString();
+    expect(displayState({ state: 'working', since: iso(10 * H), updatedAt: ahead }, NOW)).toBe(
+      'working',
+    );
+  });
+
+  it('keeps an open celebration through a later feed that does not change that member', () => {
+    const c = trackCelebrations(working, doneAt(iso(1000)), NOW, {});
+    const again = trackCelebrations(doneAt(iso(1000)), doneAt(iso(1000)), NOW + 1000, c);
+    expect(again).toEqual(c);
+  });
+
+  it('an end before the start never yields a negative mission duration', () => {
+    const f = feed({
+      missions: [{ codename: 'Silk', state: 'done', startedAt: iso(0), endedAt: iso(H) }],
+    });
+    expect(derive(f, {}, NOW).missions[0]?.runningForMs).toBe(0);
   });
 });
 

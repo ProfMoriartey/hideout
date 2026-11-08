@@ -33,6 +33,8 @@ const MAX_RESET_WAIT_MS = 3_600_000;
 const BUDGET_RESERVE = 2;
 /** Fallback length when a 403/429 carries no usable reset time. */
 const DEFAULT_FALLBACK_MS = 60_000;
+/** Fastest immediate retry when the network returns, so flapping events cannot hammer it. */
+const OFFLINE_RETRY_GAP_MS = 5000;
 const SHA_RE = /^[0-9a-f]{40}$/;
 
 export type ResponseLike = {
@@ -141,6 +143,7 @@ export function createFeedSource(options: SourceOptions): FeedSource {
   let apiNotBefore = 0;
   /** When the next poll is due; a visibility flip must not poll earlier. */
   let nextAt = 0;
+  let lastTickAt = -Infinity;
   let failures = 0;
   let timer: unknown = null;
   let inFlight = false;
@@ -205,7 +208,7 @@ export function createFeedSource(options: SourceOptions): FeedSource {
       emit({ status: 'error', source: 'raw-fallback', error: doc.error });
     } else if (snap.feed && Date.parse(doc.feed.updatedAt) <= Date.parse(snap.feed.updatedAt)) {
       // The CDN can lag the commit we already hold: never replace a newer feed.
-      emit({ status: 'stale-source', source: 'raw-fallback' });
+      emit({ status: shaInvalid ? 'error' : 'stale-source', source: 'raw-fallback' });
     } else {
       // Pinned state belongs to the feed we just replaced; re-pin on the next API check.
       etag = null;
@@ -285,6 +288,7 @@ export function createFeedSource(options: SourceOptions): FeedSource {
   async function tick() {
     if (!running || inFlight || visibility.hidden()) return;
     inFlight = true;
+    lastTickAt = clock.now();
     let delay: number;
     try {
       delay = clock.now() < apiNotBefore ? await pollFallback() : await pollApi();
@@ -311,7 +315,7 @@ export function createFeedSource(options: SourceOptions): FeedSource {
     if (visibility.hidden()) {
       if (timer !== null) clock.clearTimeout(timer);
       timer = null;
-    } else if (snap.status === 'offline') {
+    } else if (snap.status === 'offline' && clock.now() - lastTickAt >= OFFLINE_RETRY_GAP_MS) {
       // Back online (or back in the tab) after failures: retry now, not after the backoff.
       failures = 0;
       void tick();

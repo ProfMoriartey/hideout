@@ -206,4 +206,73 @@ describe('validateFeed', () => {
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.feed).not.toBe(f);
   });
+
+  it('never echoes attacker-controlled keys or values into the error', () => {
+    const evil = '<img src=x onerror=evil>';
+    const mutations: ((f: Record<string, unknown>) => void)[] = [
+      (f) => (f[evil] = 1),
+      (f) => (member(f, 'feitan')[evil] = 1),
+      (f) => (first(f.events)[evil] = 1),
+      (f) => (first(f.missions)[evil] = 1),
+      (f) => (member(f, 'feitan').verb = evil),
+      (f) => (member(f, 'feitan').state = evil),
+      (f) => (member(f, 'feitan').since = evil),
+      (f) => (member(f, 'feitan').mission = evil),
+      (f) => (first(f.events).kind = evil),
+      (f) => (first(f.events).who = 5),
+      (f) => (first(f.events).at = evil),
+      (f) => (first(f.missions).codename = evil),
+      (f) => (f.updatedAt = evil),
+      (f) => (f.version = evil),
+      (f) => (member(f, 'feitan').progress = { done: evil, total: 5 }),
+      (f) => (member(f, 'feitan').progress = { [evil]: 1, done: 1, total: 5 }),
+    ];
+    for (const [i, mutate] of mutations.entries()) {
+      const f = structuredClone(goodFeed());
+      mutate(f);
+      const r = validateFeed(f);
+      expect(r.ok, `mutation ${i}`).toBe(false);
+      if (!r.ok) expect(r.error, `mutation ${i}`).not.toContain('evil');
+    }
+  });
+
+  it('rejects wrongly shaped containers', () => {
+    expect(rejects((f) => (f.members = null))).toBe(true);
+    expect(rejects((f) => (f.members = []))).toBe(true);
+    expect(rejects((f) => (f.events = {}))).toBe(true);
+    expect(rejects((f) => (f.missions = 'none'))).toBe(true);
+    expect(rejects((f) => (f.events = [null]))).toBe(true);
+    expect(rejects((f) => (f.events = [{ at: T, who: 7, kind: 'start' }]))).toBe(true);
+    expect(rejects((f) => (member(f, 'feitan').progress = null))).toBe(true);
+    expect(rejects((f) => (member(f, 'feitan').verb = null))).toBe(true);
+    expect(rejects((f) => (member(f, 'feitan').since = 1_700_000_000))).toBe(true);
+  });
+
+  it('keeps validating an unknown member id inside an event (verb and mission still checked)', () => {
+    expect(
+      rejects((f) => (f.events = [{ at: T, who: 'hisoka', kind: 'start', verb: 'free text' }])),
+    ).toBe(true);
+  });
+
+  it('accepts the count boundaries 0/1, n/n and 999', () => {
+    const ok = (p: unknown) => !rejects((f) => (member(f, 'feitan').progress = p));
+    expect(ok({ done: 0, total: 1 })).toBe(true);
+    expect(ok({ done: 999, total: 999 })).toBe(true);
+    expect(ok({ done: 0, total: 0 })).toBe(false);
+    expect(ok({ done: 1000, total: 999 })).toBe(false);
+  });
+
+  it('rejects timestamps without a Z, with offsets, or with long fractions', () => {
+    for (const bad of [
+      '2026-11-08T12:00:00',
+      '2026-11-08T12:00:00+01:00',
+      '2026-11-08T12:00:00.1234Z',
+      '2026-11-08T12:00Z',
+    ]) {
+      expect(
+        rejects((f) => (f.updatedAt = bad)),
+        bad,
+      ).toBe(true);
+    }
+  });
 });

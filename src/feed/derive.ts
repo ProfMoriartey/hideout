@@ -109,10 +109,12 @@ export function trackCelebrations(
     const until = current[id];
     if (until !== undefined && until > now) out[id] = until;
     const done = next.members[id];
+    const age = done ? now - Date.parse(done.since) : 0;
     if (
       prev?.members[id]?.state === 'working' &&
       done?.state === 'done' &&
-      now - Date.parse(done.since) < LIVE_DONE_MS
+      age >= 0 &&
+      age < LIVE_DONE_MS
     ) {
       out[id] = now + CELEBRATE_MS;
     }

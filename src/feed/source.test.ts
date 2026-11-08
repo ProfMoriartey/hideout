@@ -524,11 +524,12 @@ describe('feed source', () => {
     t.source.start();
     await t.clock.advance(0);
     expect(t.last().status).toBe('offline');
+    await t.clock.advance(6000);
     down = false;
     t.visibility.set(false); // the 'online' event reaches the same callback
     await t.clock.advance(0);
     expect(t.last().status).toBe('live');
-    expect(t.apiCalls()[1]?.at).toBe(START);
+    expect(t.apiCalls()[1]?.at).toBe(START + 6000);
     t.source.stop();
   });
 
@@ -557,6 +558,354 @@ describe('feed source', () => {
     t.source.stop();
     t.visibility.set(true);
     t.visibility.set(false);
+    await t.clock.advance(10 * 60_000);
+    expect(t.apiCalls()).toHaveLength(1);
+  });
+});
+
+// QA round: failure modes, boundaries and ordering around the API, raw@sha and raw main.
+describe('feed source: failure modes', () => {
+  const OLD = '2026-11-08T11:00:00Z';
+  const apiOk = (headers: Record<string, string>, sha = SHA1) =>
+    headers['If-None-Match'] === `"${sha}"` ? res(304) : res(200, sha, { ETag: `"${sha}"` });
+
+  it('API 5xx and 404 keep the feed, report an error, retry with the ETag and recover', async () => {
+    let code = 200;
+    const t = setup((url, headers) => {
+      if (url === API) return code === 200 ? apiOk(headers) : res(code);
+      return json(doc(OLD));
+    });
+    t.source.start();
+    await t.clock.advance(0);
+    expect(t.last().status).toBe('live');
+    for (const c of [500, 503, 404]) {
+      code = c;
+      await t.clock.advance(30_000);
+      expect(t.last()).toMatchObject({ status: 'error', source: 'api' });
+      expect(t.last().error).toBe(`HTTP ${c} from the commits API`);
+      expect(t.last().feed).not.toBeNull();
+    }
+    code = 200;
+    await t.clock.advance(30_000);
+    expect(t.last().status).toBe('live');
+    expect(t.apiCalls().at(-1)?.headers['If-None-Match']).toBe(`"${SHA1}"`);
+    t.source.stop();
+  });
+
+  it('a 403 with no headers falls back for 60 s, then tries the API again', async () => {
+    let limited = true;
+    const t = setup((url, headers) =>
+      url === API ? (limited ? res(403) : apiOk(headers)) : json(doc(OLD)),
+    );
+    t.source.start();
+    await t.clock.advance(0);
+    limited = false;
+    await t.clock.advance(59_999);
+    expect(t.apiCalls()).toHaveLength(1);
+    await t.clock.advance(1_000);
+    expect(t.apiCalls()).toHaveLength(2);
+    expect(t.last()).toMatchObject({ status: 'live', source: 'api' });
+    t.source.stop();
+  });
+
+  it('ignores a Retry-After it cannot read (HTTP date, junk, negative)', async () => {
+    for (const ra of ['Wed, 21 Oct 2026 07:28:00 GMT', 'soon', '-5', '0']) {
+      const t = setup((url) =>
+        url === API ? res(429, '', { 'Retry-After': ra }) : json(doc(OLD)),
+      );
+      t.source.start();
+      await t.clock.advance(59_999);
+      expect(t.apiCalls(), ra).toHaveLength(1);
+      await t.clock.advance(1_000);
+      expect(t.apiCalls(), ra).toHaveLength(2);
+      t.source.stop();
+    }
+  });
+
+  it('a huge Retry-After is capped at an hour', async () => {
+    const t = setup((url) =>
+      url === API ? res(429, '', { 'Retry-After': '999999999' }) : json(doc(OLD)),
+    );
+    t.source.start();
+    await t.clock.advance(3_599_000);
+    expect(t.apiCalls()).toHaveLength(1);
+    await t.clock.advance(2_000);
+    expect(t.apiCalls()).toHaveLength(2);
+    t.source.stop();
+  });
+
+  it('returns to the API at exactly the reset, not a tick before', async () => {
+    const t = setup((url, headers) =>
+      url === API
+        ? t.clock.t < START + 90_000
+          ? res(403, '', limits(0, 90, START))
+          : apiOk(headers)
+        : json(doc(OLD)),
+    );
+    t.source.start();
+    await t.clock.advance(89_999);
+    expect(t.apiCalls()).toHaveLength(1);
+    await t.clock.advance(1_000);
+    expect(t.apiCalls()).toHaveLength(2);
+    expect(t.last().source).toBe('api');
+    t.source.stop();
+  });
+
+  it('budget headers that are past, junk or missing mean the plain 30 s', async () => {
+    const cases: Record<string, string>[] = [
+      { 'X-RateLimit-Remaining': '5', 'X-RateLimit-Reset': String(START / 1000 - 600) },
+      { 'X-RateLimit-Remaining': 'many', 'X-RateLimit-Reset': String(START / 1000 + 600) },
+      { 'X-RateLimit-Remaining': '5' },
+      { 'X-RateLimit-Reset': String(START / 1000 + 600) },
+      { 'X-RateLimit-Remaining': '5', 'X-RateLimit-Reset': 'tomorrow' },
+    ];
+    for (const h of cases) {
+      const t = setup((url, headers) =>
+        url === API
+          ? headers['If-None-Match']
+            ? res(304, '', h)
+            : res(200, SHA1, h)
+          : json(doc(OLD)),
+      );
+      t.source.start();
+      await t.clock.advance(30_000);
+      expect(t.apiCalls(), JSON.stringify(h)).toHaveLength(2);
+      t.source.stop();
+    }
+  });
+
+  it('a client clock far ahead of the reset header does not make it poll faster than 30 s', async () => {
+    const t = setup((url, headers) =>
+      url === API
+        ? headers['If-None-Match']
+          ? res(304, '', limits(1000, -86_400, START))
+          : res(200, SHA1, limits(1000, -86_400, START))
+        : json(doc(OLD)),
+    );
+    t.source.start();
+    await t.clock.advance(29_999);
+    expect(t.apiCalls()).toHaveLength(1);
+    t.source.stop();
+  });
+
+  it('a network error on raw@sha goes offline, keeps the old ETag and recovers', async () => {
+    let down = false;
+    let sha = SHA1;
+    const t = setup((url, headers) => {
+      if (url === API) return apiOk(headers, sha);
+      if (down) throw new TypeError('Failed to fetch');
+      return json(
+        doc(sha === SHA1 ? OLD : '2026-11-08T12:00:20Z', sha === SHA1 ? 'forging' : 'wiring'),
+      );
+    });
+    t.source.start();
+    await t.clock.advance(0);
+    sha = SHA2;
+    down = true;
+    await t.clock.advance(30_000);
+    expect(t.last()).toMatchObject({ status: 'offline' });
+    expect(t.last().feed?.members.phinks?.verb).toBe('forging');
+    down = false;
+    await t.clock.advance(60_000);
+    expect(t.apiCalls()[2]?.headers['If-None-Match']).toBe(`"${SHA1}"`);
+    expect(t.last()).toMatchObject({ status: 'live' });
+    expect(t.last().feed?.members.phinks?.verb).toBe('wiring');
+    t.source.stop();
+  });
+
+  it('a body that fails to read counts as offline', async () => {
+    const t = setup((url) =>
+      url === API
+        ? res(200, SHA1)
+        : { ...json(doc(OLD)), text: () => Promise.reject(new TypeError('aborted')) },
+    );
+    t.source.start();
+    await t.clock.advance(0);
+    expect(t.last().status).toBe('offline');
+    t.source.stop();
+  });
+
+  it('an unexpected throw from fetch internals does not stop the loop', async () => {
+    let n = 0;
+    const t = setup((url, headers) => {
+      if (url === API && n++ === 0) throw new RangeError('boom');
+      return url === API ? apiOk(headers) : json(doc(OLD));
+    });
+    t.source.start();
+    await t.clock.advance(0);
+    expect(t.last().status).toBe('offline'); // fetch rejections are all treated as network loss
+    await t.clock.advance(30_000);
+    expect(t.last().status).toBe('live');
+    t.source.stop();
+  });
+
+  it('raw main failures during the fallback report an error and keep the last feed', async () => {
+    let main: ResponseLike = json(doc(OLD));
+    const t = setup((url) => (url === API ? res(429) : main));
+    t.source.start();
+    await t.clock.advance(0);
+    expect(t.last().status).toBe('stale-source');
+    for (const bad of [res(404), res(503), res(200, 'nope'), json({ ...doc(OLD), extra: 1 })]) {
+      main = bad;
+      await t.clock.advance(30_000);
+      expect(t.last()).toMatchObject({ status: 'error', source: 'raw-fallback' });
+      expect(t.last().feed).not.toBeNull();
+    }
+    main = json(doc('2026-11-08T11:59:00Z', 'wiring'));
+    await t.clock.advance(30_000);
+    expect(t.last()).toMatchObject({ status: 'stale-source' });
+    expect(t.last().feed?.members.phinks?.verb).toBe('wiring');
+    t.source.stop();
+  });
+
+  it('a network error during the fallback goes offline and the fallback resumes after', async () => {
+    let down = false;
+    const t = setup((url) => {
+      if (down) throw new TypeError('Failed to fetch');
+      return url === API ? res(429, '', { 'Retry-After': '600' }) : json(doc(OLD));
+    });
+    t.source.start();
+    await t.clock.advance(0);
+    down = true;
+    await t.clock.advance(30_000);
+    expect(t.last().status).toBe('offline');
+    down = false;
+    await t.clock.advance(60_000);
+    expect(t.last()).toMatchObject({ status: 'stale-source', source: 'raw-fallback' });
+    expect(t.apiCalls()).toHaveLength(1);
+    t.source.stop();
+  });
+
+  it('an equal-updatedAt raw main keeps the held feed and does not advance lastUpdated', async () => {
+    const t = setup((url) => (url === API ? res(429) : json(doc(OLD))));
+    t.source.start();
+    await t.clock.advance(60_000);
+    expect(t.last().lastUpdated).toBe(Date.parse(OLD));
+    t.source.stop();
+  });
+
+  it('rejects a feed with extra fields, unknown verbs and free text at the fetch layer', async () => {
+    const bads = [
+      { ...doc(OLD), extra: true },
+      { ...doc(OLD), members: { phinks: { state: 'working', since: OLD, verb: 'hacking nasa' } } },
+      { ...doc(OLD), events: [{ at: OLD, who: 'phinks', kind: 'start', text: 'hi' }] },
+    ];
+    for (const bad of bads) {
+      const t = setup((url) => (url === API ? res(200, SHA1) : json(bad)));
+      t.source.start();
+      await t.clock.advance(0);
+      expect(t.last()).toMatchObject({ status: 'error', feed: null });
+      t.source.stop();
+    }
+  });
+
+  it('a bad commit is skipped when a newer good one arrives', async () => {
+    let sha = SHA1;
+    const t = setup((url, headers) => {
+      if (url === API) return apiOk(headers, sha);
+      return url === raw(SHA1)
+        ? json({ ...doc(OLD), x: 1 })
+        : json(doc('2026-11-08T12:00:10Z', 'wiring'));
+    });
+    t.source.start();
+    await t.clock.advance(0);
+    expect(t.last().status).toBe('error');
+    sha = SHA2;
+    await t.clock.advance(30_000);
+    expect(t.last()).toMatchObject({ status: 'live' });
+    expect(t.last().feed?.members.phinks?.verb).toBe('wiring');
+    t.source.stop();
+  });
+});
+
+describe('feed source: visibility and lifecycle', () => {
+  const OLD = '2026-11-08T11:00:00Z';
+  const base: Handler = (url, headers) =>
+    url === API
+      ? headers['If-None-Match']
+        ? res(304)
+        : res(200, SHA1, { ETag: `"${SHA1}"` })
+      : json(doc(OLD));
+
+  it('hiding while a request is in flight schedules nothing; showing resumes on time', async () => {
+    let release: () => void = () => {};
+    let hold = false;
+    const t = setup((url, headers) =>
+      hold && url === API
+        ? new Promise<ResponseLike>((r) => (release = () => r(base(url, headers) as ResponseLike)))
+        : base(url, headers),
+    );
+    t.source.start();
+    await t.clock.advance(30_000);
+    hold = true;
+    await t.clock.advance(30_000);
+    t.visibility.set(true);
+    release();
+    await t.clock.advance(10 * 60_000);
+    expect(t.apiCalls()).toHaveLength(3);
+    t.visibility.set(false);
+    await t.clock.advance(0);
+    expect(t.apiCalls()).toHaveLength(4);
+    t.source.stop();
+  });
+
+  it('hidden while offline makes no retries; showing retries at once', async () => {
+    let down = true;
+    const t = setup((url, headers) => {
+      if (down) throw new TypeError('Failed to fetch');
+      return base(url, headers);
+    });
+    t.source.start();
+    await t.clock.advance(0);
+    t.visibility.set(true);
+    await t.clock.advance(10 * 60_000);
+    expect(t.apiCalls()).toHaveLength(1);
+    down = false;
+    t.visibility.set(false);
+    await t.clock.advance(0);
+    expect(t.last().status).toBe('live');
+    t.source.stop();
+  });
+
+  it('toggling visibility while offline does not hammer the network', async () => {
+    const t = setup(() => {
+      throw new TypeError('Failed to fetch');
+    });
+    t.source.start();
+    await t.clock.advance(0);
+    for (let i = 0; i < 20; i++) {
+      await t.clock.advance(100);
+      t.visibility.set(true);
+      t.visibility.set(false);
+      await t.clock.advance(0);
+    }
+    expect(t.apiCalls().length).toBeLessThanOrEqual(2);
+    t.source.stop();
+  });
+
+  it('a second start() is a no-op and a restart after stop() polls once', async () => {
+    const t = setup(base);
+    t.source.start();
+    t.source.start();
+    await t.clock.advance(0);
+    expect(t.apiCalls()).toHaveLength(1);
+    t.source.stop();
+    t.source.stop();
+    t.source.start();
+    await t.clock.advance(0);
+    expect(t.apiCalls()).toHaveLength(2);
+    await t.clock.advance(30_000);
+    expect(t.apiCalls()).toHaveLength(3);
+    t.source.stop();
+  });
+
+  it('stop() during the offline backoff cancels the retry', async () => {
+    const t = setup(() => {
+      throw new TypeError('Failed to fetch');
+    });
+    t.source.start();
+    await t.clock.advance(0);
+    t.source.stop();
     await t.clock.advance(10 * 60_000);
     expect(t.apiCalls()).toHaveLength(1);
   });
