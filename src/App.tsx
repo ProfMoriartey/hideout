@@ -1,12 +1,16 @@
 import { Canvas } from '@react-three/fiber';
 import { hideBootScreen } from './boot';
 import { OverlayBoundary, SceneBoundary } from './boundaries';
+import { MEMBER_BY_ID } from './config/members';
+import { getFeedStore } from './feed/store';
 import { CameraRig } from './scene/CameraRig';
 import { Hideout } from './scene/Hideout';
 
 // Composition root. Loaded lazily from main.tsx, so everything imported here
 // (three, R3F, drei, scene and UI) is code-split from the entry chunk.
 // Tickets 3-8 each add their component on the marked line; keep the slots.
+
+getFeedStore().setNameOf((id) => MEMBER_BY_ID[id].name);
 
 export default function App() {
   return (

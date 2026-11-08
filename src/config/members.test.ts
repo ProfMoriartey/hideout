@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MEMBER_IDS as FEED_MEMBER_IDS } from '../feed/validate';
 import { MEMBERS, MEMBER_BY_ID, MEMBER_IDS, isMemberId } from './members';
 
 const SPEC = [
@@ -70,5 +71,13 @@ describe('members config', () => {
     expect(isMemberId('hisoka')).toBe(false);
     expect(isMemberId('toString')).toBe(false);
     expect(isMemberId(3)).toBe(false);
+  });
+});
+
+describe('members config and the feed agree', () => {
+  it('has the same member ids as the feed validator', () => {
+    // Order differs on purpose (config is by room, the feed by schema), so compare sets.
+    expect(new Set(MEMBER_IDS)).toEqual(new Set(FEED_MEMBER_IDS));
+    expect(MEMBER_IDS).toHaveLength(FEED_MEMBER_IDS.length);
   });
 });

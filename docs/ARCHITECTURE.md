@@ -119,6 +119,15 @@ ticket that owns them; others ask the lead.
 - `prefers-reduced-motion`: no camera drift, no particles, celebrations become a
   short static glow.
 
+## Scene layout and controls
+
+- Rooms sit in 3 columns of floors 0 (ground) and up: the left column has floors
+  0-3, the centre tower 0-4 (Nobunaga on top), the right column 5 floors, 0-4,
+  with Franklin at the top (`col 2, floor 4`).
+- Ground floor: Chrollo in the centre, the Elders on the left, sealed rock on the right.
+- Touch: 1 finger pans, 2 fingers pinch-zoom and rotate. Mouse: left drag pans,
+  right drag rotates, wheel zooms.
+
 ## Privacy
 
 The site renders only member codenames, fixed role/plaque copy from
