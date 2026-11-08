@@ -35,7 +35,7 @@
 }
 .ov-ticker {
   left: 8px;
-  bottom: calc(40px + env(safe-area-inset-bottom));
+  bottom: calc(52px + env(safe-area-inset-bottom)); /* clears the footer (about 46 px) */
   max-width: min(22rem, calc(100vw - 16px));
   padding: 4px 10px;
 }
