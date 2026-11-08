@@ -50,7 +50,7 @@ export type MemberId =
 export type Count = { done: number; total: number };
 export type FeedMemberState = 'idle' | 'working' | 'done';
 export type MemberStatus = {
-  state: FeedMemberState; since: string; verb?: string; mission?: string; progress?: Count;
+  state: FeedMemberState; since: string; updatedAt?: string; verb?: string; mission?: string; progress?: Count;
 };
 export type Mission = {
   codename: string; state: 'active' | 'done'; startedAt: string; endedAt?: string; tickets?: Count;
@@ -70,7 +70,8 @@ Events carry no text. The site builds it: `start` -> "Feitan started interrogati
 `done` -> "Feitan finished interrogating", `mission-start` -> "Operation Silk Lantern started".
 
 Display state (derived on the client, `src/feed/derive.ts`):
-- `working` and `since` older than 3 h -> **stale** (idle look plus a small "?").
+- `working` and `updatedAt` (fallback `since`) older than 3 h -> **stale** (idle look plus a small "?").
+  `since` is when the current state began ("running 42 min"); `updatedAt` is the last write.
 - `done` and `since` within the last 8 s, or a working -> done change seen live -> **done**
   celebration for ~3 s, then **idle**.
 - Otherwise `idle` / `working` as given. Missing member -> idle.
