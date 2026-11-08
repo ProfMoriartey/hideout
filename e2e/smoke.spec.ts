@@ -25,7 +25,9 @@ test('page loads, canvas renders, no console errors', async ({ page }, testInfo)
 });
 
 test('scene chunk fails: neutral message with a working Retry', async ({ page, consoleErrors }) => {
-  consoleErrors.allow(/ChunkLoadError|Failed to load resource|Failed to fetch/);
+  consoleErrors.allow(
+    /ChunkLoadError|Failed to load resource|Failed to fetch|ERR_FAILED|dynamically imported module/,
+  );
   let fail = true;
   await page.route('**/assets/App-*.js', (route) => (fail ? route.abort() : route.continue()));
 

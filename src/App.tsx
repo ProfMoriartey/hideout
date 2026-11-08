@@ -1,8 +1,12 @@
 import { Canvas } from '@react-three/fiber';
 import { hideBootScreen } from './boot';
 import { OverlayBoundary, SceneBoundary } from './boundaries';
+import { MEMBER_BY_ID } from './config/members';
+import { getFeedStore } from './feed/store';
 import { CameraRig } from './scene/CameraRig';
 import { Hideout } from './scene/Hideout';
+import { Members } from './scene/members/Members';
+import { RoomLights } from './scene/RoomLights';
 import { Footer } from './ui/Footer';
 import { MissionBanner } from './ui/MissionBanner';
 import { SoundToggle } from './ui/SoundToggle';
@@ -11,6 +15,8 @@ import { Ticker } from './ui/Ticker';
 // Composition root. Loaded lazily from main.tsx, so everything imported here
 // (three, R3F, drei, scene and UI) is code-split from the entry chunk.
 // Tickets 3-8 each add their component on the marked line; keep the slots.
+
+getFeedStore().setNameOf((id) => MEMBER_BY_ID[id].name);
 
 export default function App() {
   return (
@@ -32,6 +38,8 @@ export default function App() {
           <Hideout />
           <CameraRig />
           {/* [slot 4 Members] <Members /> and <RoomLights /> */}
+          <Members />
+          <RoomLights />
           {/* [slot 5 Labels] <Labels /> */}
           {/* [slot 8 Performance] <PerfMonitor /> */}
         </Canvas>

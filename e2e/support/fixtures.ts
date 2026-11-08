@@ -5,31 +5,45 @@ import { test as base, expect } from '@playwright/test';
 // failure) call `consoleErrors.allow(pattern)` first.
 type ConsoleErrors = { list: string[]; allow: (pattern: RegExp) => void };
 
-// The app polls GitHub for the status feed. Specs that are not about the feed
-// must not depend on the real network (a 403/404 logs a console error), so by
-// default both hosts answer with a quiet, empty, valid feed. Specs about the
-// feed register their own routes later, which take priority.
-const CORS = { 'access-control-allow-origin': '*' };
-const EMPTY_FEED = {
-  version: 1,
-  updatedAt: '2026-01-01T00:00:00Z',
-  missions: [],
-  members: {},
-  events: [],
+const SHA = 'e2e0000000000000000000000000000000000000';
+const CORS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-headers': 'If-None-Match, Accept',
+  'access-control-expose-headers': 'ETag, X-RateLimit-Remaining, X-RateLimit-Reset',
 };
 
-export const test = base.extend<{ consoleErrors: ConsoleErrors; quietFeed: undefined }>({
-  quietFeed: [
+export const test = base.extend<{ consoleErrors: ConsoleErrors; liveFeed: undefined }>({
+  // The scene polls the live feed (GitHub) as soon as it mounts. Answer it
+  // locally with an all-idle feed so no test depends on the network; specs
+  // that need other answers add their own page.route, which takes precedence.
+  liveFeed: [
     async ({ page }, use) => {
-      await page.route('**/api.github.com/**', (r) =>
-        r.fulfill({ status: 200, headers: CORS, body: 'a'.repeat(40) }),
+      await page.route('https://api.github.com/**', (route) =>
+        route.request().method() === 'OPTIONS'
+          ? route.fulfill({ status: 204, headers: CORS })
+          : route.fulfill({
+              status: 200,
+              headers: {
+                ...CORS,
+                ETag: `"${SHA}"`,
+                'X-RateLimit-Remaining': '59',
+                'X-RateLimit-Reset': String(Math.floor(Date.now() / 1000) + 3600),
+              },
+              body: SHA,
+            }),
       );
-      await page.route('**/raw.githubusercontent.com/**', (r) =>
-        r.fulfill({
+      await page.route('https://raw.githubusercontent.com/**', (route) =>
+        route.fulfill({
           status: 200,
           headers: CORS,
           contentType: 'application/json',
-          body: JSON.stringify(EMPTY_FEED),
+          body: JSON.stringify({
+            version: 1,
+            updatedAt: new Date().toISOString(),
+            missions: [],
+            members: {},
+            events: [],
+          }),
         }),
       );
       await use(undefined);
