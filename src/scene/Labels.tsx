@@ -11,7 +11,7 @@ import { useEffect } from 'react';
 import { Box3, Ray, Raycaster, Vector2, Vector3 } from 'three';
 import { MEMBERS, type MemberId } from '../config/members';
 import { getFeedStore } from '../feed/store';
-import { isTap, selectRoom } from '../ui/selection';
+import { isTap, selectRoom, useSelectedRoom } from '../ui/selection';
 import '../ui/room.css';
 import { ROOM_ANCHORS } from './voxel/hideout';
 import { ROOM } from './voxel/layout';
@@ -51,6 +51,16 @@ function span(parent: HTMLElement, cls: string, text = ''): HTMLElement {
 export function Labels() {
   const camera = useThree((s) => s.camera);
   const gl = useThree((s) => s.gl);
+  const open = useSelectedRoom();
+
+  // While a panel is open only its own label stays (others would ghost around it).
+  useEffect(() => {
+    const layer = layerRef.el;
+    if (!layer) return;
+    layer.toggleAttribute('data-panel', open !== null);
+    for (const el of layer.children)
+      el.toggleAttribute('data-open', el.getAttribute('data-room') === open);
+  }, [open]);
 
   // The DOM layer, kept in sync with the feed (verb / "no recent update").
   useEffect(() => {
@@ -159,7 +169,7 @@ export function Labels() {
       const el = kids[i];
       if (!m3 || !(el instanceof HTMLElement)) continue;
       scratch.set(...ROOM_ANCHORS[m3.id].label).project(cam);
-      el.style.transform = `translate(${Math.round((scratch.x * 0.5 + 0.5) * size.width)}px,${Math.round((-scratch.y * 0.5 + 0.5) * size.height)}px) translate(-50%,-100%)`;
+      el.style.transform = `translate(${Math.round((scratch.x * 0.5 + 0.5) * size.width)}px,${Math.round((-scratch.y * 0.5 + 0.5) * size.height)}px) translate(-50%,var(--label-y,-100%))`;
     }
   });
 

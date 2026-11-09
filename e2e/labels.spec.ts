@@ -152,7 +152,7 @@ test('all 13 labels show name and role, on screen, legible, not overlapping (def
     expect(r.y, `${r.id} top`).toBeGreaterThanOrEqual(0);
     expect(r.y + r.h, `${r.id} bottom`).toBeLessThanOrEqual(vp.height);
     expect(r.nameFont, `${r.id} name font`).toBeGreaterThanOrEqual(11);
-    expect(r.roleFont, `${r.id} role font`).toBeGreaterThanOrEqual(10);
+    expect(r.roleFont, `${r.id} role font`).toBeGreaterThanOrEqual(12);
     expect(contrast(r.color, 'rgb(11, 10, 16)'), `${r.id} contrast`).toBeGreaterThanOrEqual(4.5);
     expect(r.scrollW, `${r.id} text fits`).toBeLessThanOrEqual(r.clientW + 1);
   }
