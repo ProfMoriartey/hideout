@@ -32,3 +32,4 @@ Honest notes per image (what looks good, what looks off):
 - phone-5: panel readable (name, role, plaque, state, verb, mission, running, tickets and bar); only the selected room's label (Kortopi, with its dot) stays visible, so the cut-off labels around the panel are gone. The zoomed room still shows the Phinks "?" prop and lanterns, which are part of the scene.
 - phone-6: calm offline line at the bottom, after the fix.
 - phone-7: toggle on, same as phone-2 otherwise.
+- desktop-8 / phone-8: ticker. Phone shows the latest 3 events, one line each at 12 px (it used to start collapsed to "Activity"); desktop shows 10.
