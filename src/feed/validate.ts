@@ -57,6 +57,7 @@ export const MAX_MISSIONS = 10;
 
 const TIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
 const VERB_RE = /^[a-z]{3,20}$/;
+const KIND_RE = /^[a-z]{2,20}(-[a-z]{2,20}){0,2}$/;
 const MISSION_RE = /^[A-Z][a-z]+( [A-Z][a-z]+){0,2}$/;
 const MEMBER_STATES = ['idle', 'working', 'done'] as const;
 const MISSION_STATES = ['active', 'done'] as const;
@@ -115,11 +116,13 @@ function time(v: unknown, path: string): string {
   return v;
 }
 
-function verb(v: unknown, path: string): string {
-  if (typeof v !== 'string' || !VERB_RE.test(v) || !VERBS.includes(v)) {
-    fail(path, 'verb not allowlisted');
-  }
-  return v;
+/**
+ * A well-formed verb the site does not know yet (added to the feed repo's
+ * allowlist before a site release) is dropped, not shown and not fatal.
+ */
+function verb(v: unknown, path: string): string | undefined {
+  if (typeof v !== 'string' || !VERB_RE.test(v)) fail(path, 'bad verb');
+  return VERBS.includes(v) ? v : undefined;
 }
 
 function mission(v: unknown, path: string): string {
@@ -182,23 +185,28 @@ function parseMember(v: unknown, path: string): MemberStatus {
     since: time(o.since, `${path}.since`),
   };
   if (o.updatedAt !== undefined) m.updatedAt = time(o.updatedAt, `${path}.updatedAt`);
-  if (o.verb !== undefined) m.verb = verb(o.verb, `${path}.verb`);
+  const verbV = o.verb === undefined ? undefined : verb(o.verb, `${path}.verb`);
+  if (verbV !== undefined) m.verb = verbV;
   if (o.mission !== undefined) m.mission = mission(o.mission, `${path}.mission`);
   if (o.progress !== undefined) m.progress = count(o.progress, `${path}.progress`);
   return m;
 }
 
-/** Returns null for an otherwise valid event from an unknown member (ignored). */
+/** Returns null for an otherwise valid event from an unknown member or of an unknown kind (ignored). */
 function parseEvent(v: unknown, path: string): FeedEvent | null {
   const o = obj(v, path, ['at', 'who', 'kind', 'verb', 'mission'], ['at', 'who', 'kind']);
   const at = time(o.at, `${path}.at`);
-  const kind = oneOf(o.kind, `${path}.kind`, EVENT_KINDS);
+  if (typeof o.kind !== 'string' || !KIND_RE.test(o.kind))
+    fail(`${path}.kind`, 'value not allowed');
   const verbV = o.verb === undefined ? undefined : verb(o.verb, `${path}.verb`);
   const missionV = o.mission === undefined ? undefined : mission(o.mission, `${path}.mission`);
   if (!isMemberId(o.who)) {
     if (typeof o.who !== 'string') fail(`${path}.who`, 'expected a member id');
     return null;
   }
+  // A kind from a newer feed version is skipped, like an unknown member.
+  if (!(EVENT_KINDS as readonly string[]).includes(o.kind)) return null;
+  const kind = o.kind as FeedEvent['kind'];
   const e: FeedEvent = { at, who: o.who, kind };
   if (verbV !== undefined) e.verb = verbV;
   if (missionV !== undefined) e.mission = missionV;

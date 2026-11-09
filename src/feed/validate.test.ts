@@ -97,15 +97,33 @@ describe('validateFeed', () => {
     ).toBe(true);
   });
 
-  it('rejects verbs that match the pattern but are not allowlisted', () => {
+  it('drops verbs that match the pattern but are not allowlisted, keeping the rest', () => {
+    const f = goodFeed();
+    member(f, 'feitan').verb = 'sleeping';
+    first(f.events).verb = 'sleeping';
+    const r = validateFeed(f);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.feed.members.feitan?.verb).toBeUndefined();
+    expect(r.feed.members.feitan?.state).toBe(member(f, 'feitan').state);
+    expect(first(r.feed.events).verb).toBeUndefined();
+    expect(JSON.stringify(r.feed)).not.toContain('sleeping');
+  });
+
+  it('skips events of a well-formed unknown kind but rejects a malformed one', () => {
+    const f = goodFeed();
+    first(f.events).kind = 'mission-paused';
+    const r = validateFeed(f);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.feed.events).toHaveLength(1);
+    expect(first(r.feed.events).kind).toBe('mission-start');
     expect(
-      rejects((f) => {
-        member(f, 'feitan').verb = 'sleeping';
+      rejects((g) => {
+        first(g.events).kind = 7;
       }),
     ).toBe(true);
     expect(
-      rejects((f) => {
-        first(f.events).verb = 'sleeping';
+      rejects((g) => {
+        first(g.events).kind = 'Chat now';
       }),
     ).toBe(true);
   });
@@ -166,12 +184,7 @@ describe('validateFeed', () => {
     expect(rejects((f) => (f.missions = Array.from({ length: 11 }, () => m)))).toBe(true);
   });
 
-  it('rejects unknown event kinds and member states', () => {
-    expect(
-      rejects((f) => {
-        first(f.events).kind = 'chat';
-      }),
-    ).toBe(true);
+  it('rejects unknown member states', () => {
     expect(
       rejects((f) => {
         member(f, 'machi').state = 'sleeping';

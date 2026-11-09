@@ -102,7 +102,17 @@ export const documentVisibility: Visibility = {
   },
 };
 
-const browserFetch: FetchLike = (url, init) => globalThis.fetch(url, init);
+/** A hung request (tunnel, captive portal) would block every later poll. */
+export const FETCH_TIMEOUT_MS = 15_000;
+
+export const browserFetch: FetchLike = (url, init) =>
+  globalThis.fetch(url, {
+    ...init,
+    // Older browsers without AbortSignal.timeout keep the old, untimed fetch.
+    ...(typeof AbortSignal.timeout === 'function'
+      ? { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }
+      : {}),
+  });
 
 /** Time until the rate-limit reset, clamped so a skewed client clock cannot stretch it. */
 function untilReset(headers: ResponseLike['headers'], now: number): number {
