@@ -266,6 +266,7 @@ test('labels carry the verb for working rooms and "no recent update" for stale o
 test('close with the button, Escape, or a tap outside; tapping another room switches', async ({
   page,
 }) => {
+  test.slow(); // software GL: 14 wheel zooms with frames exceed 30 s when 2 workers share the CPU
   await open(page);
   await tapRoom(page, 'chrollo');
   await expect(panel(page).getByRole('heading')).toHaveText('Chrollo');
