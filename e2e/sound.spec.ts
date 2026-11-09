@@ -100,7 +100,7 @@ async function bootDemo(page: Page, slow = 1) {
 }
 
 /**
- * Waits until the engine has fully muted (it suspends the context a moment after fading out).
+ * Waits until the engine has fully muted, after a mute or a hide (it suspends the context a moment after fading out).
  * The suspend timer only exists once the engine chunk has handled the click, so keep nudging
  * the clock; re-reads the demo step afterwards because the nudges move time.
  */
@@ -158,7 +158,8 @@ test.describe('off by default', () => {
 
     await toggle.click();
     await expect.poll(() => contextCount(page)).toBe(1);
-    expect(requests.filter((u) => /engine-[\w-]+\.js/.test(u))).toHaveLength(1);
+    // The request event can reach the test after the page has already created the context.
+    await expect.poll(() => requests.filter((u) => /engine-[\w-]+\.js/.test(u)).length).toBe(1);
   });
 
   test('the entry bundle holds no audio code', async ({ page }) => {
@@ -588,7 +589,8 @@ test.describe('page visibility', () => {
     await expect.poll(() => contextStates(page)).toEqual(['running']);
 
     await setHidden(page, true);
-    await page.clock.fastForward(400);
+    // The suspend timer exists only once the engine has handled the change; nudge until it ran.
+    await expectSuspended(page, 'context still running while hidden');
     await expect.poll(() => contextStates(page)).toEqual(['suspended']);
     // Hidden with sound still "on": the button still says so.
     await expect(toggleOf(page)).toHaveAttribute('aria-pressed', 'true');
@@ -606,7 +608,7 @@ test.describe('page visibility', () => {
     await page.clock.fastForward(400);
     await setHidden(page, false);
     await setHidden(page, true);
-    await page.clock.fastForward(400);
+    await expectSuspended(page, 'context still running while hidden');
     await expect.poll(() => contextStates(page)).toEqual(['suspended']);
   });
 });
