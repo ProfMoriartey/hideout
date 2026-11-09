@@ -43,3 +43,32 @@ test('scene chunk fails: neutral message with a working Retry', async ({ page, c
   await expect(page.locator('html')).toHaveAttribute('data-scene', 'ready');
   await expect(page.locator('canvas')).toBeVisible();
 });
+
+test('CSP: the app runs under it, and only the feed hosts can be reached', async ({
+  page,
+  consoleErrors,
+}) => {
+  consoleErrors.allow(/Content Security Policy/);
+  await page.addInitScript(() => {
+    const w = window as unknown as { cspViolations: string[] };
+    w.cspViolations = [];
+    document.addEventListener('securitypolicyviolation', (e) => w.cspViolations.push(e.blockedURI));
+  });
+  // The first poll's feed read must also run under the policy.
+  const feedRead = page.waitForResponse('https://raw.githubusercontent.com/**');
+  await page.goto('./');
+  await expect(page.locator('html')).toHaveAttribute('data-scene', 'ready');
+  await expect(page.locator('meta[http-equiv="Content-Security-Policy"]')).toHaveCount(1);
+  await feedRead;
+  expect(
+    await page.evaluate(() => (window as unknown as { cspViolations: string[] }).cspViolations),
+  ).toEqual([]);
+
+  const blocked = await page.evaluate(() =>
+    fetch('https://example.com/').then(
+      () => 'reached',
+      () => 'blocked',
+    ),
+  );
+  expect(blocked).toBe('blocked');
+});

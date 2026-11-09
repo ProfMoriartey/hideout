@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   BASE_INTERVAL_MS,
+  FETCH_TIMEOUT_MS,
+  browserFetch,
   createFeedSource,
   type Clock,
   type FeedSnapshot,
@@ -927,5 +929,30 @@ describe('feed source: visibility and lifecycle', () => {
     t.source.stop();
     await t.clock.advance(10 * 60_000);
     expect(t.apiCalls()).toHaveLength(1);
+  });
+});
+
+describe('browserFetch', () => {
+  it('gives every request a timeout, so a hung fetch rejects and polling goes on', async () => {
+    const ctl = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(ctl.signal);
+    const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('', 'TimeoutError')),
+          );
+        }),
+    );
+    try {
+      const pending = browserFetch('https://api.github.com/x', { headers: { Accept: 'a' } });
+      expect(timeout).toHaveBeenCalledWith(FETCH_TIMEOUT_MS);
+      expect(fetch.mock.calls[0]?.[1]).toMatchObject({ headers: { Accept: 'a' } });
+      ctl.abort();
+      await expect(pending).rejects.toThrow();
+    } finally {
+      fetch.mockRestore();
+      timeout.mockRestore();
+    }
   });
 });
