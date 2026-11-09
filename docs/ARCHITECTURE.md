@@ -33,10 +33,18 @@ Chosen method (`src/feed/source.ts`):
    in the "updated" indicator. Raw main never replaces a newer feed (`updatedAt`),
    and the pinned SHA/ETag is dropped when it is used, so the next API check refetches.
    A failed raw@sha fetch (5xx/404/429) keeps the old ETag and is retried.
-5. Network errors: keep the last good feed, show the offline state, back off
-   30 s -> 60 s -> 120 s (cap), recover on the next success.
+5. Network errors (and any request taking over 15 s, which is aborted): keep the
+   last good feed, show the offline state, back off 30 s -> 60 s -> 120 s (cap),
+   recover on the next success.
 6. Every fetched document is validated (`src/feed/validate.ts`) against the same
-   rules as the feed schema; anything invalid is dropped, never rendered.
+   rules as the feed schema; anything malformed rejects the whole document, never
+   rendered. A well-formed verb the site does not know yet is dropped from its
+   member or event, and an event of a well-formed unknown kind is skipped, so a
+   new allowlist entry in the feed repo cannot take the site down.
+
+The built page carries a Content-Security-Policy meta tag (`vite.config.ts`):
+scripts only from the site itself, connections only to `api.github.com` and
+`raw.githubusercontent.com`, no third-party fonts, frames, forms or plugins.
 
 One poller per page: `src/feed/store.ts` is a singleton started by the first
 subscriber and stopped by the last. Scene code reads `useMember(id)` /

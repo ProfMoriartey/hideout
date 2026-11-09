@@ -42,7 +42,7 @@ const CSP = [
   "default-src 'none'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
+  "img-src 'self' data:",
   'connect-src https://api.github.com https://raw.githubusercontent.com',
   "base-uri 'none'",
   "form-action 'none'",

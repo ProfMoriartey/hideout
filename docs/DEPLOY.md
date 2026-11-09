@@ -36,7 +36,8 @@ for the same commit do not both finish, and a newer commit cancels an older run.
 Runs on push to `main` and manually via **Actions -> Deploy to GitHub Pages ->
 Run workflow** (`workflow_dispatch`).
 
-- **build** job: `npm ci`, `npm run build`, then `cp dist/index.html dist/404.html`
+- **build** job: `npm ci`, `npm test`, `npm run build`, `npm run size`, then
+  `cp dist/index.html dist/404.html`
   so unknown paths under `/hideout/` still load the app, then
   `actions/configure-pages` and `actions/upload-pages-artifact` (path `dist`).
 - **deploy** job: `actions/deploy-pages` into the `github-pages` environment; the
@@ -45,8 +46,8 @@ Run workflow** (`workflow_dispatch`).
 - Concurrency group `pages` with `cancel-in-progress: false`: deploys queue up
   and never cut each other off halfway.
 
-The deploy workflow does not re-run the test suite; `main` only receives code
-that already passed CI on its branch or pull request.
+The deploy re-runs the unit tests and the size budget (not e2e), so a direct
+push to `main` that skipped CI cannot ship red code.
 
 ## Rollback
 
