@@ -12,14 +12,14 @@
   left: 0;
   top: 0;
   max-width: var(--room-px, 100px);
-  padding: 2px 6px;
+  padding: 1px 5px;
   margin: 0;
   border: 0;
   border-radius: 6px;
   background: rgba(11, 10, 16, 0.72);
   color: #f1e6cc;
   font:
-    12px/1.2 system-ui,
+    11px/1.15 system-ui,
     sans-serif;
   text-align: center;
   pointer-events: none;
@@ -33,7 +33,7 @@
   display: block;
 }
 .room-name {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -141,24 +141,24 @@
 .room-name::before {
   content: '';
   display: none;
-  margin-right: 5px;
+  margin-right: 4px;
   vertical-align: middle;
 }
 .room-label[data-state='working'] .room-name::before,
 .room-label[data-state='done'] .room-name::before,
 .room-label[data-state='stale'] .room-name::before {
   display: inline-block;
-  min-width: 14px;
-  height: 14px;
-  border-radius: 7px;
-  line-height: 14px;
+  min-width: 12px;
+  height: 12px;
+  border-radius: 6px;
+  line-height: 12px;
   text-align: center;
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0;
 }
 .room-label[data-state='working'] .room-name::before {
-  min-width: 10px;
-  height: 10px;
+  min-width: 9px;
+  height: 9px;
   background: #ffb347;
   box-shadow: 0 0 6px 2px rgba(255, 179, 71, 0.8);
 }
@@ -193,14 +193,11 @@
   .room-labels[data-panel] .room-label:not([data-open]) {
     opacity: 0;
   }
-  .room-labels {
-    --label-y: 0px;
-  }
   .room-label {
     max-width: none;
-    padding: 1px 5px;
+    padding: 1px 4px;
     white-space: nowrap;
-    font-size: 12px;
+    font-size: 11px;
     background: rgba(11, 10, 16, 0.6);
   }
   .room-name {

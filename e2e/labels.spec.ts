@@ -76,7 +76,7 @@ const roomPx = (page: Page) =>
     ),
   );
 
-/** A page point inside a room: just above its label (the label sits on the room's floor edge). */
+/** A page point inside a room: just above its label (the label sits just above the room floor). */
 async function roomPoint(page: Page, id: string) {
   const b = await label(page, id).boundingBox();
   if (!b) throw new Error(`no box for ${id}`);
@@ -152,7 +152,7 @@ test('all 13 labels show name and role, on screen, legible, not overlapping (def
     expect(r.y, `${r.id} top`).toBeGreaterThanOrEqual(0);
     expect(r.y + r.h, `${r.id} bottom`).toBeLessThanOrEqual(vp.height);
     expect(r.nameFont, `${r.id} name font`).toBeGreaterThanOrEqual(11);
-    expect(r.roleFont, `${r.id} role font`).toBeGreaterThanOrEqual(12);
+    expect(r.roleFont, `${r.id} role font`).toBeGreaterThanOrEqual(11);
     expect(contrast(r.color, 'rgb(11, 10, 16)'), `${r.id} contrast`).toBeGreaterThanOrEqual(4.5);
     expect(r.scrollW, `${r.id} text fits`).toBeLessThanOrEqual(r.clientW + 1);
   }
@@ -530,7 +530,7 @@ test('draw calls: labels and panel add none', async ({ page }) => {
   expect(withPanel, 'zoomed in culls, never adds').toBeLessThanOrEqual(base);
 });
 
-test('compact labels on a narrow screen: 12px name, role kept for screen readers, panel hides the others', async ({
+test('compact labels on a narrow screen: 11px name, role kept for screen readers, panel hides the others', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -539,7 +539,7 @@ test('compact labels on a narrow screen: 12px name, role kept for screen readers
   const nameFont = await k
     .locator('.room-name')
     .evaluate((e) => parseFloat(getComputedStyle(e).fontSize));
-  expect(nameFont).toBeGreaterThanOrEqual(12);
+  expect(nameFont).toBeGreaterThanOrEqual(11);
   const role = await k.locator('.room-role').boundingBox();
   expect(role && role.width <= 1 && role.height <= 1, 'role visually hidden').toBe(true);
   await expect(page.getByRole('button', { name: /^Kortopi.*Front-end engineer/ })).toHaveCount(1);
