@@ -100,7 +100,7 @@ async function bootDemo(page: Page, slow = 1) {
 }
 
 /**
- * Waits until the engine has fully muted (it suspends the context a moment after fading out).
+ * Waits until the engine has fully muted, after a mute or a hide (it suspends the context a moment after fading out).
  * The suspend timer only exists once the engine chunk has handled the click, so keep nudging
  * the clock; re-reads the demo step afterwards because the nudges move time.
  */
