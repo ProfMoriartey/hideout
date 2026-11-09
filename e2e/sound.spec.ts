@@ -26,6 +26,8 @@ declare global {
 
 /** Frequencies of the cue notes (ambient oscillators use other values). */
 const NOTES: Record<Cue, number[]> = { start: [523.25], done: [783.99, 1174.66] };
+/** 6 drones + 1 LFO + 2 confirmation notes, all started by the unmute tap. */
+const AMBIENT_AND_CONFIRM = 9;
 const CHIME_HZ = [...NOTES.start, ...NOTES.done];
 
 /** Records every AudioContext and every oscillator start (with its frequency). */
@@ -185,8 +187,8 @@ test.describe('toggle', () => {
     await expect(toggle).toHaveAccessibleName('Sound');
     await expect(page.getByRole('button', { name: /^Sound (on|off)$/ })).toHaveCount(0);
     expect(await stored(page)).toBe('on');
-    // The ambient loop: four drone oscillators and one slow LFO, and no chime yet.
-    await expect.poll(() => oscillatorCount(page)).toBe(5);
+    // The ambient loop: six drone oscillators, one slow LFO and the two-note tap confirmation, and no feed chime yet.
+    await expect.poll(() => oscillatorCount(page)).toBe(AMBIENT_AND_CONFIRM);
     expect(await chimes(page)).toEqual([]);
     await expect.poll(() => contextStates(page)).toEqual(['running']);
 
@@ -201,7 +203,7 @@ test.describe('toggle', () => {
     await toggle.click();
     await expect.poll(() => contextStates(page)).toEqual(['running']);
     expect(await contextCount(page)).toBe(1);
-    expect(await oscillatorCount(page)).toBe(5);
+    expect(await oscillatorCount(page)).toBe(AMBIENT_AND_CONFIRM + 2); // turning it on again confirms again
   });
 
   test('is a real button, reachable and operable by keyboard with a visible focus ring', async ({
@@ -298,7 +300,7 @@ test.describe('remembered choice', () => {
     await toggleOf(page).click();
     await expect(toggleOf(page)).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(() => contextCount(page)).toBe(1);
-    await expect.poll(() => oscillatorCount(page)).toBe(5);
+    await expect.poll(() => oscillatorCount(page)).toBe(AMBIENT_AND_CONFIRM);
     await expect.poll(() => contextStates(page)).toEqual(['running']);
     expect(await chimes(page)).toEqual([]);
     expect(await stored(page)).toBe('on');
@@ -387,7 +389,7 @@ test.describe('cues', () => {
     // This step already holds a long history of events; turning sound on stays silent.
     expect(demoFeedAt(step, SEED, ORIGIN).events.length).toBeGreaterThan(0);
     await toggleOf(page).click();
-    await expect.poll(() => oscillatorCount(page)).toBe(5);
+    await expect.poll(() => oscillatorCount(page)).toBe(AMBIENT_AND_CONFIRM);
     expect(await chimes(page)).toEqual([]);
 
     // Each demo step is 4 s (> the rate limit), so every step with a cue chimes once.
@@ -414,7 +416,7 @@ test.describe('cues', () => {
     await page.addInitScript(installAudioSpy);
     await bootDemo(page);
     await toggleOf(page).click();
-    await expect.poll(() => oscillatorCount(page)).toBe(5);
+    await expect.poll(() => oscillatorCount(page)).toBe(AMBIENT_AND_CONFIRM);
     // fastForward jumps five steps in one update: several new start/done events at once.
     const cue = cueBetween(step, step + 5);
     expect(cue).not.toBeNull();
@@ -432,7 +434,7 @@ test.describe('cues', () => {
     await page.addInitScript(installAudioSpy);
     await bootDemo(page, 4);
     await toggleOf(page).click();
-    await expect.poll(() => oscillatorCount(page)).toBe(5);
+    await expect.poll(() => oscillatorCount(page)).toBe(AMBIENT_AND_CONFIRM);
     expect(DEMO_STEP_MS / 4).toBeLessThan(CUE_GAP_MS);
     const expected: number[] = [];
     for (let i = 0; i < 6; i++) {
@@ -478,7 +480,7 @@ test.describe('cues', () => {
     await expect(page.locator('html')).toHaveAttribute('data-scene', 'ready');
     await expect(page.getByText('Updated')).toBeVisible();
     await toggleOf(page).click();
-    await expect.poll(() => oscillatorCount(page)).toBe(5);
+    await expect.poll(() => oscillatorCount(page)).toBe(AMBIENT_AND_CONFIRM);
 
     let n = 0;
     /** One poll cycle, optionally with a new event. */
@@ -518,7 +520,7 @@ test.describe('cues', () => {
     await bootDemo(page);
     await advanceTo(page, step + 1);
     await toggleOf(page).click();
-    await expect.poll(() => oscillatorCount(page)).toBe(5);
+    await expect.poll(() => oscillatorCount(page)).toBe(AMBIENT_AND_CONFIRM);
     await toggleOf(page).click();
     await expect(toggleOf(page)).toHaveAttribute('aria-pressed', 'false');
     await expectSuspended(page, 'context still running after mute');
@@ -563,7 +565,7 @@ test.describe('cues', () => {
     await expect(page.locator('html')).toHaveAttribute('data-scene', 'ready');
     await expect(page.getByText('Updated')).toBeVisible();
     await toggleOf(page).click();
-    await expect.poll(() => oscillatorCount(page)).toBe(5);
+    await expect.poll(() => oscillatorCount(page)).toBe(AMBIENT_AND_CONFIRM);
     expect(await chimes(page)).toEqual([]);
 
     sha = 1;
@@ -575,6 +577,40 @@ test.describe('cues', () => {
     events.unshift({ at: new Date(ORIGIN + 40_000).toISOString(), who: 'machi', kind: 'done' });
     await page.clock.fastForward(35_000);
     await expect.poll(() => chimes(page)).toEqual([...NOTES.start, ...NOTES.done]);
+  });
+});
+
+test.describe('audible output', () => {
+  // The tap must produce real, non-silent samples at the destination (an analyser
+  // is spliced in front of it), not only create nodes.
+  test('after the tap the context runs and the output is not silent', async ({ page }) => {
+    await page.addInitScript(() => {
+      const w = window as unknown as { __an?: AnalyserNode };
+      const connect = AudioNode.prototype.connect as (...a: unknown[]) => unknown;
+      AudioNode.prototype.connect = function (this: AudioNode, ...a: unknown[]) {
+        const target = a[0];
+        if (target instanceof AudioDestinationNode) {
+          w.__an ??= target.context.createAnalyser();
+          connect.call(this, w.__an);
+        }
+        return connect.apply(this, a);
+      } as typeof AudioNode.prototype.connect;
+    });
+    await page.addInitScript(installAudioSpy);
+    await bootDemo(page);
+    await toggleOf(page).click();
+    await expect.poll(() => contextStates(page)).toEqual(['running']);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const an = (window as unknown as { __an?: AnalyserNode }).__an;
+          if (!an) return 0;
+          const d = new Float32Array(an.fftSize);
+          an.getFloatTimeDomainData(d);
+          return d.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+        }),
+      )
+      .toBeGreaterThan(0.01);
   });
 });
 
