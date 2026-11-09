@@ -22,6 +22,8 @@ describe('quality tiers', () => {
 
   it('ignores the first second (startup hitches)', () => {
     const m = createMonitor('high');
+    expect(stepMonitor(m, 0.95)).toBe(false);
+    // A 0.9 s hitch straddling the end of the warm-up is not counted.
     expect(stepMonitor(m, 0.9)).toBe(false);
     expect(run(m, 60, 3.2)).toBe(0);
     expect(m.tier).toBe('high');

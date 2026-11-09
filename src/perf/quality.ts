@@ -57,8 +57,12 @@ export function stepMonitor(m: Monitor, dt: number): boolean {
     m.frames = 0;
     return false;
   }
+  if (m.time < 0) {
+    // The frame that ends the warm-up is not counted either (it may be the hitch).
+    m.time = Math.min(0, m.time + dt);
+    return false;
+  }
   m.time += dt;
-  if (m.time <= 0) return false;
   m.frames++;
   if (m.time < WINDOW_SECONDS) return false;
   const slow = m.frames / m.time < DROP_FPS;

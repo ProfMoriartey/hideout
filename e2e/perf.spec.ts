@@ -290,6 +290,8 @@ test.describe('WebGL context loss', () => {
     await sceneReady(page);
     const note = page.locator('.gl-lost');
     await expect(note).toHaveCount(0);
+    const sound = page.getByRole('button', { name: 'Sound' });
+    await sound.focus();
 
     await page.evaluate(() => {
       const gl = document.querySelector('canvas')?.getContext('webgl2');
@@ -301,14 +303,15 @@ test.describe('WebGL context loss', () => {
     await expect(note).toBeVisible();
     await expect(note).toHaveAttribute('role', 'alert');
     await expect(note).toContainText(/went dark/i);
+    // Focus moves to Reload on its own, so a keyboard user is not left on hidden controls.
     const reload = note.getByRole('button', { name: 'Reload' });
-    await reload.focus();
     await expect(reload).toBeFocused();
 
     await page.evaluate(() =>
       (window as unknown as { __ext: WEBGL_lose_context }).__ext.restoreContext(),
     );
     await expect(note).toHaveCount(0);
+    await expect(sound).toBeFocused();
     // The scene draws again after the restore.
     const before = await renders(page);
     await expect.poll(() => renders(page)).toBeGreaterThan(before + 5);

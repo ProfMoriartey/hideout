@@ -57,12 +57,15 @@ export function PerfMonitor({ tier, reduced, onDrop }: Props) {
     reload.textContent = 'Reload';
     reload.onclick = () => location.reload();
     note.append(text, reload);
+    let before: Element | null = null;
     const onLost = () => {
+      before = document.activeElement;
       document.body.append(note);
       reload.focus();
     };
     const onRestored = () => {
       note.remove();
+      if (before instanceof HTMLElement && before.isConnected) before.focus();
       invalidate();
     };
     canvas.addEventListener('webglcontextlost', onLost);
