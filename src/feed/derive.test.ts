@@ -231,6 +231,15 @@ describe('derive', () => {
 });
 
 describe('eventText', () => {
+  it('names the ticket on start and progress', () => {
+    const ticket = { n: 3, title: 'structure' };
+    expect(eventText({ at: iso(0), who: 'kortopi', kind: 'start', verb: 'building', ticket })).toBe(
+      'Kortopi started building ticket 3 · structure',
+    );
+    expect(
+      eventText({ at: iso(0), who: 'kortopi', kind: 'progress', verb: 'building', ticket }),
+    ).toBe('Kortopi is still building ticket 3 · structure');
+  });
   it('builds text from kind, verb and display name only', () => {
     expect(eventText({ at: iso(0), who: 'feitan', kind: 'start', verb: 'interrogating' })).toBe(
       'Feitan started interrogating',

@@ -145,12 +145,13 @@ export function formatAgo(ms: number): string {
 
 export function eventText(e: FeedEvent, nameOf: NameOf = defaultName): string {
   const who = nameOf(e.who);
+  const on = e.ticket ? ` ${ticketText(e.ticket)}` : '';
   const op = e.mission ? `Operation ${e.mission}` : 'Operation';
   switch (e.kind) {
     case 'start':
-      return e.verb ? `${who} started ${e.verb}` : `${who} started work`;
+      return `${e.verb ? `${who} started ${e.verb}` : `${who} started work`}${on}`;
     case 'progress':
-      return e.verb ? `${who} is still ${e.verb}` : `${who} made progress`;
+      return `${e.verb ? `${who} is still ${e.verb}` : `${who} made progress`}${on}`;
     case 'done':
       return e.verb ? `${who} finished ${e.verb}` : `${who} finished`;
     case 'mission-start':

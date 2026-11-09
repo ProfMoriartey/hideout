@@ -44,7 +44,7 @@ const emptyFeed = (extra: object = {}) => ({
   ...extra,
 });
 const text = (page: Page) => page.locator('body').innerText();
-/** Phone portrait starts with the ticker collapsed; open it like a user would. */
+/** The ticker starts open; open it if a user collapsed it. */
 async function openTicker(page: Page) {
   const details = page.locator('details.ov-ticker');
   await expect(details).toBeAttached();

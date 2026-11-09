@@ -696,7 +696,6 @@ test.describe('phone portrait layout', () => {
     await expect(page.getByRole('region', { name: 'Active missions' })).toBeVisible();
     await expectClear(page, '412x915');
     await shot(page, testInfo, 'phone-demo');
-    await page.locator('details.ov-ticker summary').click();
     await expectClear(page, '412x915 ticker open');
     await page.setViewportSize({ width: 360, height: 640 });
     await expectClear(page, '360x640');
