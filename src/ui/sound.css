@@ -1,0 +1,26 @@
+/* Sound toggle: top right, clear of the centred banner on phone and desktop. */
+.ov.ov-sound {
+  top: max(8px, env(safe-area-inset-top));
+  right: max(8px, env(safe-area-inset-right));
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid rgba(241, 230, 204, 0.3);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.ov.ov-sound[aria-pressed='true'] {
+  border-color: #ffb347;
+}
+.ov.ov-sound:focus-visible {
+  outline: 2px solid #ffb347;
+  outline-offset: 2px;
+}
+/* Phone: leave room for the toggle so a long banner cannot slide under it. */
+@media (max-width: 600px) {
+  .ov.ov-banner {
+    max-width: calc(100vw - 120px);
+  }
+}

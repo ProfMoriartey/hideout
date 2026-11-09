@@ -1,0 +1,86 @@
+/* Global overlays: small, dark glass, never over the middle of the hideout. */
+.ov {
+  position: fixed;
+  z-index: 5;
+  box-sizing: border-box;
+  margin: 0;
+  color: #f1e6cc;
+  background: rgba(11, 10, 16, 0.78);
+  font:
+    13px/1.35 system-ui,
+    sans-serif;
+  border-radius: 8px;
+  pointer-events: none;
+}
+.ov a,
+.ov summary {
+  pointer-events: auto;
+}
+.ov a:focus-visible,
+.ov summary:focus-visible {
+  outline: 2px solid #ffb347;
+  outline-offset: 2px;
+}
+.ov-banner {
+  top: max(8px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 16px);
+  padding: 4px 12px;
+  text-align: center;
+  letter-spacing: 0.04em;
+  max-height: 6rem;
+  overflow: hidden;
+}
+.ov-banner p {
+  margin: 0;
+}
+.ov-ticker {
+  left: 8px;
+  bottom: calc(64px + env(safe-area-inset-bottom)); /* clears the footer (about 46 px) */
+  max-width: min(22rem, calc(100vw - 16px));
+  padding: 4px 10px;
+}
+.ov-ticker summary {
+  cursor: pointer;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+}
+.ov-ticker ul {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  max-height: 9rem;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+.ov-ticker li + li {
+  margin-top: 2px;
+}
+.ov-ticker time {
+  opacity: 0.75;
+}
+.ov-foot {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px calc(6px + env(safe-area-inset-bottom));
+  border-radius: 0;
+}
+.ov-foot a {
+  color: #ffd27a;
+  padding: 8px 4px;
+}
+.ov-fresh {
+  margin: 0;
+}
+@media (max-width: 600px) {
+  .ov-ticker summary {
+    min-height: 44px;
+  }
+}
