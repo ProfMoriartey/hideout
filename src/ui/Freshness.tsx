@@ -20,7 +20,7 @@ export function Freshness() {
     <p className="ov-fresh">
       {age}
       {/* Announced once per change, not every second. */}
-      <span role="status">{NOTE[status] && ` - ${NOTE[status]}`}</span>
+      <span role="status">{NOTE[status] && `${age ? ' - ' : ''}${NOTE[status]}`}</span>
     </p>
   );
 }

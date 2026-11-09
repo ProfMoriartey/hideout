@@ -42,4 +42,9 @@ describe('Freshness', () => {
     expect(render(0, 'error', 3000)).toContain('Feed unavailable.');
     expect(render(null, 'offline', 3000)).toContain('Offline, retrying.');
   });
+  it('has no dangling separator before the note when nothing was ever loaded', () => {
+    expect(render(null, 'offline', 3000)).toBe('Offline, retrying.');
+    expect(render(null, 'loading', 3000)).toBe('Connecting...');
+    expect(render(0, 'error', 3000)).toBe('Updated 3 s ago - Feed unavailable.');
+  });
 });
