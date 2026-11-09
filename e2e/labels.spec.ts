@@ -529,3 +529,30 @@ test('draw calls: labels and panel add none', async ({ page }) => {
   expect(withPanel).toBeLessThan(DRAW_CALL_BUDGET);
   expect(withPanel, 'zoomed in culls, never adds').toBeLessThanOrEqual(base);
 });
+
+test('compact labels on a narrow screen: 12px name, role kept for screen readers, panel hides the others', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page);
+  const k = label(page, 'kortopi');
+  const nameFont = await k
+    .locator('.room-name')
+    .evaluate((e) => parseFloat(getComputedStyle(e).fontSize));
+  expect(nameFont).toBeGreaterThanOrEqual(12);
+  const role = await k.locator('.room-role').boundingBox();
+  expect(role && role.width <= 1 && role.height <= 1, 'role visually hidden').toBe(true);
+  await expect(page.getByRole('button', { name: /^Kortopi.*Front-end engineer/ })).toHaveCount(1);
+  await k.focus();
+  await page.keyboard.press('Enter');
+  await frames(page);
+  await expect(panel(page)).toBeVisible();
+  for (const m of MEMBERS) {
+    const o = await label(page, m.id).evaluate((e) => getComputedStyle(e).opacity);
+    expect(o, m.id).toBe(m.id === 'kortopi' ? '1' : '0');
+  }
+  await page.keyboard.press('Escape');
+  await frames(page);
+  for (const m of MEMBERS)
+    expect(await label(page, m.id).evaluate((e) => getComputedStyle(e).opacity), m.id).toBe('1');
+});

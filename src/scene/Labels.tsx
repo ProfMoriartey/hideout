@@ -68,6 +68,7 @@ export function Labels() {
     layer.className = 'room-labels';
     layer.setAttribute('role', 'group');
     layer.setAttribute('aria-label', 'Rooms');
+    const dones: HTMLElement[] = [];
     const verbs = MEMBERS.map((m) => {
       const b = document.createElement('button');
       b.type = 'button';
@@ -78,6 +79,7 @@ export function Labels() {
       span(b, 'room-name', m.name);
       span(b, 'room-role', m.role);
       const verb = span(b, 'room-verb');
+      dones.push(span(b, 'room-done')); // screen-reader text for the tick (done state only)
       span(b, 'room-plaque', m.plaque);
       layer.append(b);
       return verb;
@@ -91,12 +93,15 @@ export function Labels() {
         el.textContent =
           display === 'working' && verb ? verb : display === 'stale' ? 'no recent update' : '';
         el.parentElement?.setAttribute('data-state', display);
+        const d = dones[i];
+        if (d) d.textContent = display === 'done' ? 'done' : '';
       });
     };
     sync();
     const off = store.subscribe(sync);
     document.body.append(layer);
     layerRef.el = layer;
+    markOpen(layer, openRef.id); // a remounted layer must learn the open room
     last.fill(NaN); // a remounted layer must be placed again
     return () => {
       off();
@@ -174,6 +179,14 @@ export function Labels() {
   });
 
   return null;
+}
+
+const openRef: { id: MemberId | null } = { id: null };
+
+function markOpen(layer: HTMLElement, id: MemberId | null) {
+  layer.toggleAttribute('data-panel', id !== null);
+  for (const el of layer.children)
+    el.toggleAttribute('data-open', el.getAttribute('data-room') === id);
 }
 
 const layerRef: { el: HTMLElement | null } = { el: null };
