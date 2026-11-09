@@ -8,6 +8,7 @@ import type {
   MemberStatus,
   Mission,
   StatusFeed,
+  Ticket,
 } from './types';
 
 export type DisplayState = 'idle' | 'working' | 'done' | 'stale';
@@ -26,6 +27,11 @@ export const TICKER_SIZE = 10;
 export type Celebrations = Partial<Record<MemberId, number>>;
 export type NameOf = (id: MemberId) => string;
 
+/** "ticket 3 · structure" */
+export function ticketText(t: Ticket): string {
+  return `ticket ${t.n} · ${t.title}`;
+}
+
 /** What the scene needs: changes only when the display does, never with the clock. */
 export type MemberCore = {
   id: MemberId;
@@ -37,6 +43,7 @@ export type MemberCore = {
   verb?: string;
   mission?: string;
   progress?: Count;
+  ticket?: Ticket;
 };
 
 export type MemberView = MemberCore & {
@@ -176,6 +183,7 @@ export function memberCore(
   if (status?.verb !== undefined) core.verb = status.verb;
   if (status?.mission !== undefined) core.mission = status.mission;
   if (status?.progress !== undefined) core.progress = status.progress;
+  if (status?.ticket !== undefined) core.ticket = status.ticket;
   return core;
 }
 

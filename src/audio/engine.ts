@@ -14,6 +14,11 @@ const NOTES: Record<Cue, [number, number][]> = {
   ],
 };
 
+const CONFIRM: [number, number][] = [
+  [659.25, 0],
+  [987.77, 0.12],
+];
+
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let unsub: (() => void) | null = null;
@@ -26,37 +31,39 @@ const seen = new Set<string>();
 function startAmbient(c: AudioContext, out: AudioNode) {
   const filter = c.createBiquadFilter();
   filter.type = 'lowpass';
-  filter.frequency.value = 420;
+  filter.frequency.value = 900;
   filter.connect(out);
   // A low open fifth with slight detune; the slow tremolo keeps it breathing.
-  for (const f of [55, 55.4, 82.4, 110.3]) {
+  // The upper pair sits where phone and laptop speakers can actually reproduce
+  // it: the 55-110 Hz drone alone was inaudible there, which read as "no sound".
+  for (const f of [55, 55.4, 82.4, 110.3, 220.6, 329.6]) {
     const o = c.createOscillator();
     o.frequency.value = f;
     const g = c.createGain();
-    g.gain.value = 0.03;
+    g.gain.value = f > 200 ? 0.04 : 0.05;
     o.connect(g).connect(filter);
     o.start();
   }
   const lfo = c.createOscillator();
   lfo.frequency.value = 0.12;
   const depth = c.createGain();
-  depth.gain.value = 120; // Hz of cutoff swing
+  depth.gain.value = 250; // Hz of cutoff swing
   lfo.connect(depth).connect(filter.frequency);
   lfo.start();
 }
 
-function chime(cue: Cue) {
+function chime(notes: [number, number][]) {
   // A cue on a suspended context would play stale on resume.
   if (!ctx || !master || document.hidden) return;
   const c = ctx;
   const out = master;
-  for (const [freq, delay] of NOTES[cue]) {
+  for (const [freq, delay] of notes) {
     const t = c.currentTime + delay;
     const o = c.createOscillator();
     o.frequency.value = freq;
     const g = c.createGain();
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.12, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.2, t + 0.015);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
     o.connect(g).connect(out);
     o.start(t);
@@ -73,7 +80,7 @@ function onFeed() {
   const now = performance.now();
   if (cue && shouldChime(cue, lastCueAt, now)) {
     lastCueAt = now;
-    chime(cue);
+    chime(NOTES[cue]);
   }
 }
 
@@ -108,6 +115,9 @@ export function setSound(next: boolean, context: AudioContext): void {
     seen.clear();
     unsub = getFeedStore().subscribe(onFeed);
     onFeed();
+    // Immediate audible confirmation of the tap (cues otherwise wait for feed events).
+    // Its own pitches, so it neither counts as nor rate-limits a feed cue.
+    chime(CONFIRM);
   } else {
     unsub?.();
     unsub = null;

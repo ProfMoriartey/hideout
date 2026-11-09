@@ -1,7 +1,15 @@
 // Zero-dependency validator for the status feed. Mirrors
 // hideout-status/schema/status.schema.json and schema/allowlist.json.
 // Invalid documents are rejected whole; unknown member ids are dropped.
-import type { Count, FeedEvent, MemberId, MemberStatus, Mission, StatusFeed } from './types';
+import type {
+  Count,
+  FeedEvent,
+  MemberId,
+  MemberStatus,
+  Mission,
+  StatusFeed,
+  Ticket,
+} from './types';
 
 export const MEMBER_IDS: readonly MemberId[] = [
   'chrollo',
@@ -50,6 +58,70 @@ export const VERBS: readonly string[] = [
   'testing',
   'tracking',
   'wiring',
+];
+
+export const TITLES: readonly string[] = [
+  'setup',
+  'scaffold',
+  'structure',
+  'design',
+  'layout',
+  'interface',
+  'pages',
+  'components',
+  'styling',
+  'data',
+  'database',
+  'api',
+  'backend',
+  'auth',
+  'accounts',
+  'payments',
+  'cart',
+  'search',
+  'feed',
+  'sync',
+  'integration',
+  'notifications',
+  'messaging',
+  'content',
+  'media',
+  'characters',
+  'animation',
+  'labels',
+  'sound',
+  'performance',
+  'mobile',
+  'accessibility',
+  'localization',
+  'security',
+  'privacy',
+  'tests',
+  'review',
+  'fixes',
+  'refactor',
+  'cleanup',
+  'docs',
+  'deploy',
+  'infrastructure',
+  'monitoring',
+  'analytics',
+  'migration',
+  'import',
+  'export',
+  'reports',
+  'admin',
+  'settings',
+  'onboarding',
+  'polish',
+  'release',
+  'research',
+  'planning',
+  'spec',
+  'bot',
+  'model',
+  'prompts',
+  'pipeline',
 ];
 
 export const MAX_EVENTS = 20;
@@ -125,6 +197,14 @@ function verb(v: unknown, path: string): string | undefined {
   return VERBS.includes(v) ? v : undefined;
 }
 
+/** Like verbs, a well-formed title the site does not know yet drops the whole ticket. */
+function ticket(v: unknown, path: string): Ticket | undefined {
+  const o = obj(v, path, ['n', 'title'], ['n', 'title']);
+  const n = int(o.n, `${path}.n`, 1, 999);
+  if (typeof o.title !== 'string' || !VERB_RE.test(o.title)) fail(`${path}.title`, 'bad title');
+  return TITLES.includes(o.title) ? { n, title: o.title } : undefined;
+}
+
 function mission(v: unknown, path: string): string {
   if (typeof v !== 'string' || !MISSION_RE.test(v)) fail(path, 'bad mission codename');
   return v;
@@ -177,7 +257,7 @@ function parseMember(v: unknown, path: string): MemberStatus {
   const o = obj(
     v,
     path,
-    ['state', 'since', 'updatedAt', 'verb', 'mission', 'progress'],
+    ['state', 'since', 'updatedAt', 'verb', 'mission', 'progress', 'ticket'],
     ['state', 'since'],
   );
   const m: MemberStatus = {
@@ -189,6 +269,8 @@ function parseMember(v: unknown, path: string): MemberStatus {
   if (verbV !== undefined) m.verb = verbV;
   if (o.mission !== undefined) m.mission = mission(o.mission, `${path}.mission`);
   if (o.progress !== undefined) m.progress = count(o.progress, `${path}.progress`);
+  const ticketV = o.ticket === undefined ? undefined : ticket(o.ticket, `${path}.ticket`);
+  if (ticketV !== undefined) m.ticket = ticketV;
   return m;
 }
 
