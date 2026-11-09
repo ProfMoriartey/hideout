@@ -179,7 +179,7 @@ export function Labels() {
       const el = kids[i];
       if (!m3 || !(el instanceof HTMLElement)) continue;
       scratch.set(...ROOM_ANCHORS[m3.id].label).project(cam);
-      el.style.transform = `translate(${Math.round((scratch.x * 0.5 + 0.5) * size.width)}px,${Math.round((-scratch.y * 0.5 + 0.5) * size.height)}px) translate(-50%,var(--label-y,-100%))`;
+      el.style.transform = `translate(${Math.round((scratch.x * 0.5 + 0.5) * size.width)}px,${Math.round((-scratch.y * 0.5 + 0.5) * size.height)}px) translate(-50%,-100%)`;
     }
   });
 

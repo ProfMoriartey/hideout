@@ -176,7 +176,10 @@ describe('hideout', () => {
           expect(p[k]).toBeGreaterThanOrEqual((a.box.min[k] ?? 0) - 1);
           expect(p[k]).toBeLessThanOrEqual(a.box.max[k] ?? 0);
         }
-      expect(a.label[1]).toBeGreaterThan(a.box.max[1] - 0.01);
+      // label sits inside its own room, just above the floor
+      expect(a.label[1]).toBeGreaterThan(a.box.min[1]);
+      expect(a.label[1]).toBeLessThan(a.box.min[1] + 3);
+      expect(a.label[2]).toBeLessThanOrEqual(a.box.max[2]);
     }
     expect(ROOM_ANCHORS.elders.seats).toHaveLength(11);
   });
