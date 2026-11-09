@@ -28,7 +28,7 @@ export type RoomAnchors = {
   readonly figure: Vec3;
   /** Top surface for the role prop. */
   readonly prop: Vec3;
-  /** Above the room's open front, for the name label. */
+  /** Below the room's open front (on the floor edge), for the name label. */
   readonly label: Vec3;
   /** Wall lantern centre (glow position for RoomLights). */
   readonly light: Vec3;
@@ -76,7 +76,7 @@ function computeAnchors(member: Member): RoomAnchors {
   const anchors: RoomAnchors = {
     figure: add(o, s.figure),
     prop: add(o, s.prop),
-    label: [(box.min[0] + box.max[0]) / 2, box.max[1] + 0.5, box.max[2] + 0.5],
+    label: [(box.min[0] + box.max[0]) / 2, box.min[1] - 0.5, box.max[2] + 0.5],
     light: add(o, [s.lantern[0] + 0.5, s.lantern[1] + 0.5, s.lantern[2] + 0.5]),
     center: boxCenter(box),
     box,

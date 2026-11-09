@@ -76,11 +76,11 @@ const roomPx = (page: Page) =>
     ),
   );
 
-/** A page point inside a room: just under its label (the label sits above the room's open front). */
+/** A page point inside a room: just above its label (the label sits on the room's floor edge). */
 async function roomPoint(page: Page, id: string) {
   const b = await label(page, id).boundingBox();
   if (!b) throw new Error(`no box for ${id}`);
-  return { x: b.x + b.width / 2, y: b.y + b.height + (await roomPx(page)) * 0.3 };
+  return { x: b.x + b.width / 2, y: b.y - (await roomPx(page)) * 0.3 };
 }
 
 async function tapRoom(page: Page, id: string) {

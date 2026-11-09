@@ -185,7 +185,7 @@
   clip-path: inset(50%);
 }
 
-/* Phone portrait: name only, one line, tucked into the room's ceiling strip so the
+/* Phone portrait: name only, one line, tucked along the room's floor edge so the
    figure and room stay visible. Role and verb stay in the accessibility tree and the panel. */
 @media (max-width: 600px), (max-height: 500px) {
   /* While a panel is open only its own label shows (opacity, not visibility, so
@@ -194,7 +194,7 @@
     opacity: 0;
   }
   .room-labels {
-    --label-y: 2px;
+    --label-y: 0px;
   }
   .room-label {
     max-width: none;
