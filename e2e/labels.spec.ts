@@ -152,7 +152,7 @@ test('all 13 labels show name and role, on screen, legible, not overlapping (def
     expect(r.y, `${r.id} top`).toBeGreaterThanOrEqual(0);
     expect(r.y + r.h, `${r.id} bottom`).toBeLessThanOrEqual(vp.height);
     expect(r.nameFont, `${r.id} name font`).toBeGreaterThanOrEqual(11);
-    expect(r.roleFont, `${r.id} role font`).toBeGreaterThanOrEqual(10);
+    expect(r.roleFont, `${r.id} role font`).toBeGreaterThanOrEqual(12);
     expect(contrast(r.color, 'rgb(11, 10, 16)'), `${r.id} contrast`).toBeGreaterThanOrEqual(4.5);
     expect(r.scrollW, `${r.id} text fits`).toBeLessThanOrEqual(r.clientW + 1);
   }
@@ -528,4 +528,31 @@ test('draw calls: labels and panel add none', async ({ page }) => {
   console.log(`[draw calls] default ${base}, panel open ${withPanel}`);
   expect(withPanel).toBeLessThan(DRAW_CALL_BUDGET);
   expect(withPanel, 'zoomed in culls, never adds').toBeLessThanOrEqual(base);
+});
+
+test('compact labels on a narrow screen: 12px name, role kept for screen readers, panel hides the others', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page);
+  const k = label(page, 'kortopi');
+  const nameFont = await k
+    .locator('.room-name')
+    .evaluate((e) => parseFloat(getComputedStyle(e).fontSize));
+  expect(nameFont).toBeGreaterThanOrEqual(12);
+  const role = await k.locator('.room-role').boundingBox();
+  expect(role && role.width <= 1 && role.height <= 1, 'role visually hidden').toBe(true);
+  await expect(page.getByRole('button', { name: /^Kortopi.*Front-end engineer/ })).toHaveCount(1);
+  await k.focus();
+  await page.keyboard.press('Enter');
+  await frames(page);
+  await expect(panel(page)).toBeVisible();
+  for (const m of MEMBERS) {
+    const o = await label(page, m.id).evaluate((e) => getComputedStyle(e).opacity);
+    expect(o, m.id).toBe(m.id === 'kortopi' ? '1' : '0');
+  }
+  await page.keyboard.press('Escape');
+  await frames(page);
+  for (const m of MEMBERS)
+    expect(await label(page, m.id).evaluate((e) => getComputedStyle(e).opacity), m.id).toBe('1');
 });

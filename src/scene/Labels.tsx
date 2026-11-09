@@ -11,7 +11,7 @@ import { useEffect } from 'react';
 import { Box3, Ray, Raycaster, Vector2, Vector3 } from 'three';
 import { MEMBERS, type MemberId } from '../config/members';
 import { getFeedStore } from '../feed/store';
-import { isTap, selectRoom } from '../ui/selection';
+import { isTap, selectRoom, useSelectedRoom } from '../ui/selection';
 import '../ui/room.css';
 import { ROOM_ANCHORS } from './voxel/hideout';
 import { ROOM } from './voxel/layout';
@@ -51,6 +51,16 @@ function span(parent: HTMLElement, cls: string, text = ''): HTMLElement {
 export function Labels() {
   const camera = useThree((s) => s.camera);
   const gl = useThree((s) => s.gl);
+  const open = useSelectedRoom();
+
+  // While a panel is open only its own label stays (others would ghost around it).
+  useEffect(() => {
+    const layer = layerRef.el;
+    if (!layer) return;
+    layer.toggleAttribute('data-panel', open !== null);
+    for (const el of layer.children)
+      el.toggleAttribute('data-open', el.getAttribute('data-room') === open);
+  }, [open]);
 
   // The DOM layer, kept in sync with the feed (verb / "no recent update").
   useEffect(() => {
@@ -58,6 +68,7 @@ export function Labels() {
     layer.className = 'room-labels';
     layer.setAttribute('role', 'group');
     layer.setAttribute('aria-label', 'Rooms');
+    const dones: HTMLElement[] = [];
     const verbs = MEMBERS.map((m) => {
       const b = document.createElement('button');
       b.type = 'button';
@@ -68,6 +79,7 @@ export function Labels() {
       span(b, 'room-name', m.name);
       span(b, 'room-role', m.role);
       const verb = span(b, 'room-verb');
+      dones.push(span(b, 'room-done')); // screen-reader text for the tick (done state only)
       span(b, 'room-plaque', m.plaque);
       layer.append(b);
       return verb;
@@ -81,12 +93,15 @@ export function Labels() {
         el.textContent =
           display === 'working' && verb ? verb : display === 'stale' ? 'no recent update' : '';
         el.parentElement?.setAttribute('data-state', display);
+        const d = dones[i];
+        if (d) d.textContent = display === 'done' ? 'done' : '';
       });
     };
     sync();
     const off = store.subscribe(sync);
     document.body.append(layer);
     layerRef.el = layer;
+    markOpen(layer, openRef.id); // a remounted layer must learn the open room
     last.fill(NaN); // a remounted layer must be placed again
     return () => {
       off();
@@ -159,11 +174,19 @@ export function Labels() {
       const el = kids[i];
       if (!m3 || !(el instanceof HTMLElement)) continue;
       scratch.set(...ROOM_ANCHORS[m3.id].label).project(cam);
-      el.style.transform = `translate(${Math.round((scratch.x * 0.5 + 0.5) * size.width)}px,${Math.round((-scratch.y * 0.5 + 0.5) * size.height)}px) translate(-50%,-100%)`;
+      el.style.transform = `translate(${Math.round((scratch.x * 0.5 + 0.5) * size.width)}px,${Math.round((-scratch.y * 0.5 + 0.5) * size.height)}px) translate(-50%,var(--label-y,-100%))`;
     }
   });
 
   return null;
+}
+
+const openRef: { id: MemberId | null } = { id: null };
+
+function markOpen(layer: HTMLElement, id: MemberId | null) {
+  layer.toggleAttribute('data-panel', id !== null);
+  for (const el of layer.children)
+    el.toggleAttribute('data-open', el.getAttribute('data-room') === id);
 }
 
 const layerRef: { el: HTMLElement | null } = { el: null };
