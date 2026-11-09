@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { MEMBER_BY_ID } from '../config/members';
-import type { DisplayState, MemberView } from '../feed/derive';
+import { ticketText, type DisplayState, type MemberView } from '../feed/derive';
 import { useFeed } from '../feed/useFeed';
 import { focusRoom, resetView } from '../scene/CameraRig';
 import { selectRoom, useSelectedRoom } from './selection';
@@ -29,6 +29,12 @@ function Details({ m }: { m: MemberView }) {
         <>
           <dt>Doing</dt>
           <dd>{m.verb}</dd>
+        </>
+      )}
+      {m.ticket && m.display === 'working' && (
+        <>
+          <dt>Ticket</dt>
+          <dd>{ticketText(m.ticket)}</dd>
         </>
       )}
       {m.mission && (

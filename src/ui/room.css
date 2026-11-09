@@ -38,6 +38,10 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+.room-ticket:not(:empty) {
+  color: #e8dcc0;
+  font-size: 11px;
+}
 .room-verb:not(:empty) {
   color: #ffd27a;
 }
@@ -204,6 +208,7 @@
   }
   .room-label .room-role,
   .room-label .room-verb,
+  .room-label .room-ticket,
   .room-labels[data-plaque] .room-label .room-plaque {
     position: absolute;
     width: 1px;

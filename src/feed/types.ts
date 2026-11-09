@@ -15,6 +15,8 @@ export type MemberId =
   | 'shizuku'
   | 'bonolenov'
   | 'kalluto';
+/** The ticket a working member is on; title is a word from the feed allowlist. */
+export type Ticket = { n: number; title: string };
 export type Count = { done: number; total: number };
 export type FeedMemberState = 'idle' | 'working' | 'done';
 export type MemberStatus = {
@@ -24,6 +26,7 @@ export type MemberStatus = {
   verb?: string;
   mission?: string;
   progress?: Count;
+  ticket?: Ticket;
 };
 export type Mission = {
   codename: string;

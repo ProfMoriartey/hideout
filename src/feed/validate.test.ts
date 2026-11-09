@@ -109,6 +109,29 @@ describe('validateFeed', () => {
     expect(JSON.stringify(r.feed)).not.toContain('sleeping');
   });
 
+  it('accepts a ticket, drops an unknown title, rejects free text and extra fields', () => {
+    const f = goodFeed();
+    member(f, 'feitan').ticket = { n: 3, title: 'structure' };
+    const ok = validateFeed(f);
+    if (!ok.ok) throw new Error(ok.error);
+    expect(ok.feed.members.feitan?.ticket).toEqual({ n: 3, title: 'structure' });
+    member(f, 'feitan').ticket = { n: 3, title: 'gardening' };
+    const dropped = validateFeed(f);
+    if (!dropped.ok) throw new Error(dropped.error);
+    expect(dropped.feed.members.feitan?.ticket).toBeUndefined();
+    for (const bad of [
+      { n: 0, title: 'setup' },
+      { n: 1000, title: 'setup' },
+      { n: 3, title: 'Not A Word' },
+      { n: 3, title: 'setup', note: 'x' },
+      { n: 3 },
+      'setup',
+    ]) {
+      member(f, 'feitan').ticket = bad;
+      expect(validateFeed(f).ok, JSON.stringify(bad)).toBe(false);
+    }
+  });
+
   it('skips events of a well-formed unknown kind but rejects a malformed one', () => {
     const f = goodFeed();
     first(f.events).kind = 'mission-paused';
