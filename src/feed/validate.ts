@@ -276,12 +276,13 @@ function parseMember(v: unknown, path: string): MemberStatus {
 
 /** Returns null for an otherwise valid event from an unknown member or of an unknown kind (ignored). */
 function parseEvent(v: unknown, path: string): FeedEvent | null {
-  const o = obj(v, path, ['at', 'who', 'kind', 'verb', 'mission'], ['at', 'who', 'kind']);
+  const o = obj(v, path, ['at', 'who', 'kind', 'verb', 'mission', 'ticket'], ['at', 'who', 'kind']);
   const at = time(o.at, `${path}.at`);
   if (typeof o.kind !== 'string' || !KIND_RE.test(o.kind))
     fail(`${path}.kind`, 'value not allowed');
   const verbV = o.verb === undefined ? undefined : verb(o.verb, `${path}.verb`);
   const missionV = o.mission === undefined ? undefined : mission(o.mission, `${path}.mission`);
+  const ticketV = o.ticket === undefined ? undefined : ticket(o.ticket, `${path}.ticket`);
   if (!isMemberId(o.who)) {
     if (typeof o.who !== 'string') fail(`${path}.who`, 'expected a member id');
     return null;
@@ -292,6 +293,7 @@ function parseEvent(v: unknown, path: string): FeedEvent | null {
   const e: FeedEvent = { at, who: o.who, kind };
   if (verbV !== undefined) e.verb = verbV;
   if (missionV !== undefined) e.mission = missionV;
+  if (ticketV !== undefined) e.ticket = ticketV;
   return e;
 }
 

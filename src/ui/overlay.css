@@ -83,4 +83,18 @@
   .ov-ticker summary {
     min-height: 44px;
   }
+  /* Phone: the latest 3 events, one line each. */
+  .ov-ticker ul {
+    max-height: none;
+    overflow: visible;
+  }
+  .ov-ticker li {
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .ov-ticker li:nth-child(n + 4) {
+    display: none;
+  }
 }

@@ -132,6 +132,24 @@ describe('validateFeed', () => {
     }
   });
 
+  it('accepts a ticket on an event and rejects bad ones', () => {
+    const f = goodFeed();
+    const ev = first(f.events);
+    ev.ticket = { n: 3, title: 'structure' };
+    const ok = validateFeed(f);
+    if (!ok.ok) throw new Error(ok.error);
+    expect(ok.feed.events[0]?.ticket).toEqual({ n: 3, title: 'structure' });
+    for (const bad of [
+      { n: 0, title: 'setup' },
+      { n: 3, title: 'Free Text' },
+      { n: 3, title: 'setup', x: 1 },
+      'setup',
+    ]) {
+      ev.ticket = bad;
+      expect(validateFeed(f).ok, JSON.stringify(bad)).toBe(false);
+    }
+  });
+
   it('skips events of a well-formed unknown kind but rejects a malformed one', () => {
     const f = goodFeed();
     first(f.events).kind = 'mission-paused';

@@ -55,6 +55,15 @@ through `store.setNameOf` (the lead wires `src/config/members.ts` at integration
 `?demo=1` (optional `&seed=<n>&origin=<epoch ms>`) swaps the source for a local fake feed (`src/feed/demo.ts`) that cycles
 members through all states, several at once, plus missions and events.
 
+## Word lists and pinned actions
+
+`src/feed/validate.ts` keeps its own copy of the members, verbs and titles. CI runs
+`src/feed/allowlist.sync.test.ts` (`ALLOWLIST_SYNC=1`), which fetches
+`hideout-status/schema/allowlist.json` from `main` and fails when they differ, so
+add a word here before (or together with) adding it there. Every third-party
+GitHub Action in `.github/workflows` is pinned to a full commit SHA with the
+version in a comment.
+
 ## Feed contract (v1)
 
 The schema lives in `hideout-status/schema/status.schema.json`; allowlists in
@@ -76,7 +85,7 @@ export type Mission = {
 export type FeedEvent = {
   at: string; who: MemberId;
   kind: 'start' | 'progress' | 'done' | 'mission-start' | 'mission-progress' | 'mission-done';
-  verb?: string; mission?: string;
+  verb?: string; mission?: string; ticket?: Ticket; // start and progress only
 };
 export type StatusFeed = {
   version: 1; updatedAt: string; missions: Mission[];

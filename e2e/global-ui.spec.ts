@@ -44,13 +44,15 @@ const emptyFeed = (extra: object = {}) => ({
   ...extra,
 });
 const text = (page: Page) => page.locator('body').innerText();
-/** Phone portrait starts with the ticker collapsed; open it like a user would. */
+/** The ticker starts open; open it if a user collapsed it. */
 async function openTicker(page: Page) {
   const details = page.locator('details.ov-ticker');
   await expect(details).toBeAttached();
   if ((await details.getAttribute('open')) === null) await details.locator('summary').click();
   await expect(ticker(page)).toBeVisible();
 }
+/** Phone portrait shows the latest 3 events; larger screens show all 10. */
+const shownCount = (page: Page) => ((page.viewportSize()?.width ?? 1280) <= 600 ? 3 : 10);
 const ticker = (page: Page) => page.getByRole('list', { name: 'Recent activity' });
 
 test.beforeEach(({ consoleErrors }) => {
@@ -101,7 +103,7 @@ test.describe('ticker', () => {
     const expected = (at: number) =>
       derive(demoFeedAt(step, SEED, ORIGIN), {}, at).ticker.map((l) => l.text);
     const items = ticker(page).getByRole('listitem');
-    await expect(items).toHaveCount(10);
+    await expect(items).toHaveCount(shownCount(page));
     const got = await items.allTextContents();
     expect(got.length).toBeLessThanOrEqual(10);
     const lines = derive(demoFeedAt(step, SEED, ORIGIN), {}, now).ticker;
@@ -130,11 +132,11 @@ test.describe('ticker', () => {
     await live(page, emptyFeed({ events }));
     await openTicker(page);
     const items = ticker(page).getByRole('listitem');
-    await expect(items).toHaveCount(10);
+    await expect(items).toHaveCount(shownCount(page));
     const t = await items.allTextContents();
     expect(t[0]).toBe('Feitan finished testing - just now');
     expect(t[1]).toBe('Feitan finished testing - 1 min ago');
-    expect(t[9]).toBe('Feitan finished testing - 9 min ago');
+    if (shownCount(page) === 10) expect(t[9]).toBe('Feitan finished testing - 9 min ago');
   });
 
   test('uses calm wording for events without a verb', async ({ page }) => {

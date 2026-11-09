@@ -41,6 +41,7 @@ export type FeedEvent = {
   kind: 'start' | 'progress' | 'done' | 'mission-start' | 'mission-progress' | 'mission-done';
   verb?: string;
   mission?: string;
+  ticket?: Ticket;
 };
 export type StatusFeed = {
   version: 1;
